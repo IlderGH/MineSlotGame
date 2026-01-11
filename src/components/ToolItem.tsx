@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Image, StyleSheet, View, Text } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -7,74 +8,135 @@ import Animated, {
     withTiming,
     withRepeat,
     Easing,
-    withDelay
+    withDelay,
+    runOnJS
 } from 'react-native-reanimated';
 import { Tool } from '../types/game';
 import { TOOL_IMAGES } from '../constants/assets';
+import { TOOL_HIT_DURATION, ENTRANCE_DURATION } from '../constants/gameRules';
 
 interface ToolItemProps {
     tool: Tool | null;
     size: number;
+    pathOffsets?: number[];
+    startDelay?: number;
 }
 
-export const ToolItem = ({ tool, size }: ToolItemProps) => {
-    // Valores compartidos para la animación (Estado nativo)
-    const translateY = useSharedValue(0); // Movimiento vertical
-    const rotation = useSharedValue(0);   // Rotación (el golpe)
+export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolItemProps) => {
+    const translateY = useSharedValue(-size * 1.5);
+    const rotation = useSharedValue(0);
+    const opacity = useSharedValue(1);
+    const scale = useSharedValue(1);
 
-    // Definimos cómo se ve el estilo animado
-    const animatedStyle = useAnimatedStyle(() => {
+    // Dynamic overflow to allow entrance masking but permit mining movement
+    const [overflowState, setOverflowState] = useState<'hidden' | 'visible'>('hidden');
+
+    const containerAnimatedStyle = useAnimatedStyle(() => {
+        return {
+            opacity: opacity.value,
+        };
+    });
+
+    const innerAnimatedStyle = useAnimatedStyle(() => {
         return {
             transform: [
                 { translateY: translateY.value },
-                { rotate: `${rotation.value}deg` } // Rotación en grados
+                { rotate: `${rotation.value}deg` },
+                { scale: scale.value }
             ],
         };
     });
 
     useEffect(() => {
-        if (!tool) return;
+        if (!tool) {
+            opacity.value = 0;
+            return;
+        }
 
-        // CONFIGURACIÓN DE LA ANIMACIÓN
-        // Queremos que golpee tantas veces como "usos" tenga.
-        // Ojo: Esto es visual. La lógica matemática ya restó la vida.
+        console.log('ToolItem: scheduling animation', { type: tool.type, delay: startDelay });
 
-        // 1. Definimos la duración de un golpe (bajar y subir)
-        const HIT_DURATION = 300;
+        // 1. SETUP / ENTRANCE
+        setOverflowState('hidden');
+        opacity.value = 1;
+        scale.value = 1;
 
-        // 2. Secuencia de Rotación (El "Golpe")
-        // Gira a -45deg (prepara), luego a 15deg (golpea fuerte), luego a 0 (vuelve)
-        rotation.value = withRepeat(
-            withSequence(
-                withTiming(-45, { duration: HIT_DURATION / 2 }), // Prepara hacia atrás
-                withTiming(15, { duration: HIT_DURATION / 4 }),  // ¡GOLPE RÁPIDO!
-                withTiming(0, { duration: HIT_DURATION / 4 })    // Retorno
-            ),
-            tool.uses, // Repetir X veces (según los usos del pico)
-            false // No hacer reverse (no rebobinar)
-        );
+        // Reset and Slide In
+        translateY.value = -size * 1.5;
+        rotation.value = 0;
 
-        // 3. Secuencia de Movimiento (Acercarse al bloque)
-        // Baja 20 pixeles para simular que se acerca al grid
-        translateY.value = withRepeat(
-            withSequence(
-                withTiming(20, { duration: HIT_DURATION / 2, easing: Easing.out(Easing.quad) }), // Baja
-                withTiming(0, { duration: HIT_DURATION / 2, easing: Easing.in(Easing.quad) })    // Sube
-            ),
-            tool.uses,
-            false
-        );
+        translateY.value = withTiming(0, {
+            duration: ENTRANCE_DURATION,
+            easing: Easing.out(Easing.back(1.5))
+        }, (finished) => {
+            if (finished) {
+                runOnJS(setOverflowState)('visible');
+            }
+        });
 
-    }, [tool]); // Se ejecuta cada vez que cambia la herramienta (nuevo turno)
+        // 2. MINING SCHEDULE
+        const HIT_DURATION = TOOL_HIT_DURATION;
+        const miningStartDelay = startDelay + ENTRANCE_DURATION;
+
+        const timer = setTimeout(() => {
+            console.log('ToolItem: starting mining NOW');
+
+            // Si no hay camino (no hay bloques), solo desvanecemos la herramienta sin animación de golpe
+            if (pathOffsets.length === 0) {
+                opacity.value = withTiming(0, { duration: 300 });
+                return;
+            }
+
+            if (tool.type === 'tnt') {
+                // --- TNT ANIMATION ---
+                // 1. Drop to the block
+                const targetY = pathOffsets[0]; // Seguro porque length > 0
+                translateY.value = withTiming(targetY, { duration: HIT_DURATION * 0.5, easing: Easing.in(Easing.quad) });
+
+                // 2. Explode (Scale Up) and Fade Out
+                scale.value = withDelay(HIT_DURATION * 0.5, withTiming(2.5, { duration: 300, easing: Easing.out(Easing.quad) }));
+                opacity.value = withDelay(HIT_DURATION * 0.5 + 100, withTiming(0, { duration: 200 }));
+
+            } else if (tool.uses > 0) {
+                // --- NORMAL TOOL ANIMATION ---
+                // ROTATION SEQUENCE
+                rotation.value = withRepeat(
+                    withSequence(
+                        withTiming(-60, { duration: HIT_DURATION / 2 }),
+                        withTiming(30, { duration: HIT_DURATION / 4 }),
+                        withTiming(0, { duration: HIT_DURATION / 4 })
+                    ),
+                    // Si el path es más corto que los usos (ej. rompió todo antes), limitamos la animación visual
+                    Math.min(tool.uses, pathOffsets.length),
+                    false
+                );
+
+                // MOVEMENT SEQUENCE
+                const sequence: any[] = [];
+                pathOffsets.forEach(target => {
+                    // 1. Move to block (Fast Drop)
+                    sequence.push(withTiming(target, { duration: HIT_DURATION * 0.3, easing: Easing.out(Easing.quad) }));
+                    // 2. Stay on block (Hold) whie hitting
+                    sequence.push(withTiming(target, { duration: HIT_DURATION * 0.7 }));
+                });
+                translateY.value = withSequence(...sequence);
+
+                // EXIT
+                const totalMiningDuration = pathOffsets.length * HIT_DURATION;
+                opacity.value = withDelay(totalMiningDuration, withTiming(0, { duration: 300 }));
+            }
+        }, miningStartDelay);
+
+        return () => clearTimeout(timer);
+
+    }, [tool?.id]);
 
     if (!tool) {
         return <View style={{ width: size, height: size }} />;
     }
 
     return (
-        <View style={[styles.container, { width: size, height: size }]}>
-            {/* Usamos Animated.View en lugar de View normal */}
-            <Animated.View style={[styles.innerContainer, animatedStyle]}>
+        <Animated.View style={[styles.container, { width: size, height: size, overflow: overflowState }, containerAnimatedStyle]}>
+            <Animated.View style={[styles.innerContainer, innerAnimatedStyle]}>
                 <Image
                     source={TOOL_IMAGES[tool.type]}
                     style={styles.image}
@@ -82,20 +144,20 @@ export const ToolItem = ({ tool, size }: ToolItemProps) => {
                 />
             </Animated.View>
 
-            {/* El badge de usos lo dejamos estático fuera de la animación para que se lea bien */}
             <View style={styles.badge}>
-                <Text style={styles.badgeText}>{tool.uses}</Text>
+                <Text style={styles.badgeText}>x {tool.uses}</Text>
             </View>
-        </View>
+        </Animated.View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
-        padding: 5,
+
+        // overflow handled dynamically inline
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 10, // Para que el pico pase por encima de otras cosas si baja mucho
+        // zIndex: 10,  <-- Removed to ensure masking works properly within parent context if needed, though for local masking overflow hidden is key.
     },
     innerContainer: {
         width: '100%',

@@ -22,3 +22,10 @@ export const BLOCKS_CONFIG: Record<BlockType, { health: number; value: number }>
 
 export const GRID_ROWS = 6;
 export const GRID_COLS = 5;
+
+// Duración de la animación de UN golpe (ms)
+export const TOOL_HIT_DURATION = 800;
+export const ENTRANCE_DURATION = 500;
+
+export const TOOL_ROWS = 2;
+export const MAX_SPINS = 10;

@@ -10,9 +10,10 @@ interface BlockItemProps {
     size: number; // El tamaño lo calcularemos desde fuera
     currentHealth: number;
     maxHealth: number;
+    isDestroyed?: boolean;
 }
 
-export const BlockItem = ({ type, size, currentHealth, maxHealth }: BlockItemProps) => {
+export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed }: BlockItemProps) => {
     const imageSource = BLOCK_IMAGES[type];
 
     // Cálculo del porcentaje de vida (0.0 a 1.0)
@@ -60,7 +61,7 @@ export const BlockItem = ({ type, size, currentHealth, maxHealth }: BlockItemPro
 
 const styles = StyleSheet.create({
     container: {
-        padding: 2,
+        padding: 1,
         justifyContent: 'center',
         alignItems: 'center',
         position: 'relative', // Importante para que los hijos absolutos se posicionen respecto a esto

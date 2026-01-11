@@ -23,4 +23,6 @@ export interface Block {
 // Representa una celda en la grilla superior (donde caen los picos)
 export interface ToolSlot {
     tool: Tool | null; // Puede estar vacía
+    plannedPath?: number[];
+    startDelay?: number;
 }

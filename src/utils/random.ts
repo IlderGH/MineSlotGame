@@ -2,11 +2,11 @@ import { BlockType, ToolType } from "../types/game";
 
 // Definimos las probabilidades (debe sumar 100 o aproximado para entenderlo fácil)
 const BLOCK_CHANCES: Record<BlockType, number> = {
-    dirt: 0.4,       // 40% de probabilidad
-    stone: 0.3,      // 30%
-    iron_ore: 0.15,  // 15%
-    gold_ore: 0.1,   // 10%
-    diamond_ore: 0.05 // 5% (Muy raro)
+    dirt: 0.10,       // 40% de probabilidad
+    stone: 0.20,      // 30%
+    iron_ore: 0.10,  // 15%
+    gold_ore: 0.20,   // 10%
+    diamond_ore: 0.40 // 5% (Muy raro)
 };
 
 const TOOL_CHANCES: Record<ToolType, number> = {
