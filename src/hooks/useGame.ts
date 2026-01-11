@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Block, ToolSlot } from '../types/game';
 import { createNewBoard, createNewTools, processTurn, applyTntDamage, applyToolDamage, simulateToolPath, generateMultipliers } from '../utils/gameLogic';
-import { TOOL_HIT_DURATION, TOOL_ROWS, GRID_COLS, MAX_SPINS } from '../constants/gameRules';
+import { TOOL_HIT_DURATION, TOOL_ROWS, GRID_COLS, MAX_SPINS, ENTRANCE_DURATION, PRESENTATION_DURATION } from '../constants/gameRules';
 
 export type GameState = 'BETTING' | 'PLAYING' | 'FINISHED';
 
@@ -63,33 +63,63 @@ export const useGame = () => {
             let maxTotalDuration = 0;
 
             // ... (Lógica de simulación idéntica a la anterior) ...
-            for (let col = 0; col < GRID_COLS; col++) {
-                let currentColumnTime = 0;
-                const bottomRowIdx = TOOL_ROWS - 1;
+            const columnTimers = new Array(GRID_COLS).fill(0);
+            let globalNonTntMaxTime = 0;
+            const pendingTNTs: { r: number; c: number; slot: any }[] = [];
 
+            // FASE 1: Procesar Herramientas Normales (Picos)
+            // Esto asegura que todo el minado normal ocurra primero
+            for (let col = 0; col < GRID_COLS; col++) {
+                const bottomRowIdx = TOOL_ROWS - 1;
                 for (let r = bottomRowIdx; r >= 0; r--) {
                     const slot = newToolsRows[r][col];
                     if (slot.tool) {
+                        if (slot.tool.type === 'tnt') {
+                            pendingTNTs.push({ r, c: col, slot });
+                            continue;
+                        }
+
+                        // Lógica Normal
                         const path = simulateToolPath(simGrid, col, slot.tool);
                         slot.plannedPath = path;
-                        if (!slot.startDelay) slot.startDelay = 0;
-                        slot.startDelay = currentColumnTime;
+                        slot.startDelay = columnTimers[col];
 
-                        const uses = slot.tool.type === 'tnt' ? 1 : slot.tool.uses;
+                        const uses = slot.tool.uses;
                         const myDuration = (uses * TOOL_HIT_DURATION);
 
-                        if (slot.tool.type === 'tnt') {
-                            const res = applyTntDamage(simGrid, col, slot.tool.damagePerHit);
-                            simGrid = res.newGrid;
-                        } else {
-                            const res = applyToolDamage(simGrid, col, slot.tool.damagePerHit, slot.tool.uses);
-                            simGrid = res.newGrid;
-                        }
-                        currentColumnTime += (myDuration + 200);
+                        const res = applyToolDamage(simGrid, col, slot.tool.damagePerHit, slot.tool.uses);
+                        simGrid = res.newGrid;
+
+                        columnTimers[col] += (myDuration + 200); // 200ms gap
                     }
                 }
-                if (currentColumnTime > maxTotalDuration) maxTotalDuration = currentColumnTime;
+                if (columnTimers[col] > globalNonTntMaxTime) globalNonTntMaxTime = columnTimers[col];
             }
+
+            // FASE 2: Procesar TNT (Finales)
+            // Las TNT esperan a que terminen los picos para un efecto dramático final
+            // Ordenamos por fila (abajo primero) para consistencia física
+            pendingTNTs.sort((a, b) => b.r - a.r);
+
+            pendingTNTs.forEach(({ r, c, slot }) => {
+                // La TNT espera a que su columna esté libre Y a que termine la fase global de picos
+                const startTime = Math.max(columnTimers[c], globalNonTntMaxTime);
+
+                const path = simulateToolPath(simGrid, c, slot.tool);
+                slot.plannedPath = path;
+                slot.startDelay = startTime;
+
+                const myDuration = TOOL_HIT_DURATION; // TNT duration (approx logic)
+
+                const res = applyTntDamage(simGrid, c, slot.tool.damagePerHit);
+                simGrid = res.newGrid;
+
+                columnTimers[c] = startTime + myDuration + 500; // Extra gap after explosion
+                if (columnTimers[c] > maxTotalDuration) maxTotalDuration = columnTimers[c];
+            });
+
+            // Actualizar maxTotalDuration con el tiempo final de la fase 1 también
+            if (globalNonTntMaxTime > maxTotalDuration) maxTotalDuration = globalNonTntMaxTime;
 
             setTools(newToolsRows);
 
@@ -102,7 +132,11 @@ export const useGame = () => {
                     const delay = slot.startDelay || 0;
                     const uses = tool.type === 'tnt' ? 1 : tool.uses;
                     const duration = uses * TOOL_HIT_DURATION;
-                    const updateTime = delay + duration + 100;
+                    // Sync logic update with visual animation start (Entrance + Presentation)
+                    // Add extra buffer (800ms) to ensure Visuals (controlled by App.tsx breakDelay) happen FIRST.
+                    // This prevents strict Reference Checks from killing the block before the animation hits.
+                    // Especially important for TNT (Uses=1).
+                    const updateTime = delay + duration + 800 + ENTRANCE_DURATION + PRESENTATION_DURATION;
 
                     setTimeout(() => {
                         setGrid(prevGrid => {
@@ -122,17 +156,7 @@ export const useGame = () => {
             // FIN DEL TIRO
             setTimeout(() => {
                 setIsAnimating(false);
-
-                // Chequear fin de juego
-                // Usamos 'simGrid' que es la predicción final de este turno?
-                // O mejor, verificamos el estado en el siguiente render?
-                // El problema es que spinsRemaining es clousure. 
-                // Usamos functional update check?
-
-                // Lo más seguro: Un useEffect que monitoree spinsRemaining y isAnimating.
-                // Si spinsRemaining == 0 y !isAnimating -> FINISH.
-
-            }, Math.max(1000, maxTotalDuration + 500));
+            }, Math.max(1000, maxTotalDuration + 500 + ENTRANCE_DURATION + PRESENTATION_DURATION));
 
         } catch (error) {
             console.error("Error in spin logic:", error);

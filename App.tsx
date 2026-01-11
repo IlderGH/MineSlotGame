@@ -2,9 +2,9 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Dimensions, SafeAreaView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { BlockItem } from './src/components/BlockItem';
 import { ToolItem } from './src/components/ToolItem';
-import { GRID_COLS } from './src/constants/gameRules';
+import { GRID_COLS, TOOL_HIT_DURATION, ENTRANCE_DURATION, PRESENTATION_DURATION } from './src/constants/gameRules';
 import { useGame } from './src/hooks/useGame';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = (width - 30) / GRID_COLS;
@@ -18,6 +18,33 @@ export default function App() {
   } = useGame();
 
   const [inputBet, setInputBet] = useState('');
+
+  // Calculate destruction delays map for efficient lookup during render
+  const destructionDelays = useMemo(() => {
+    const delays: Record<string, number> = {};
+    if (gameState === 'PLAYING') {
+      tools.forEach((row, rowIndex) => {
+        row.forEach((slot, colIndex) => {
+          if (slot.tool && slot.plannedPath) {
+            slot.plannedPath.forEach((gridRow, stepIndex) => {
+              // TNT: Drop (400) + Prime(400) + Explode(100+) -> Break at ~900ms (1.1-1.2x)
+              // Pickaxe: Swing ends at 0.7-0.8. Break at 0.85.
+              const hitOffsetRatio = slot.tool?.type === 'tnt' ? 1.2 : 0.85;
+              // Add PRESENTATION_DURATION to sync with tool Pause
+              const impactTime = (slot.startDelay || 0) + ENTRANCE_DURATION + PRESENTATION_DURATION + (stepIndex * TOOL_HIT_DURATION) + (TOOL_HIT_DURATION * hitOffsetRatio);
+
+              if (grid[gridRow] && grid[gridRow][colIndex]) {
+                const blockId = grid[gridRow][colIndex].id;
+                delays[blockId] = impactTime;
+              }
+            });
+          }
+        });
+      });
+    }
+    console.log(`[App] Calculated ${Object.keys(delays).length} destruction delays.`);
+    return delays;
+  }, [tools, grid, gameState]);
 
   const handleStart = () => {
     const amount = parseInt(inputBet);
@@ -77,8 +104,9 @@ export default function App() {
                   const rowsBelow = (tools.length - 1) - rowIndex;
                   const extraDistance = rowsBelow * ITEM_SIZE;
 
+
                   const pathOffsets = rowPath.map(gridRowIndex => {
-                    return 10 + (gridRowIndex * ITEM_SIZE) + extraDistance;
+                    return 60 + (gridRowIndex * ITEM_SIZE) + extraDistance;
                   });
 
                   return (
@@ -203,6 +231,7 @@ const styles = StyleSheet.create({
     width: '90%',
     marginBottom: 10,
     marginTop: 30, // SafeArea spacing
+    zIndex: 102,
   },
   infoText: {
     color: 'white',
@@ -232,6 +261,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#333',
     justifyContent: 'center',
+    width: '100%',
+    marginBottom: 5, // Spacing between tool rows
     overflow: 'visible' // Ensure tools dropping out of row aren't clipped
   },
   separator: { height: 2, width: '90%', backgroundColor: '#555', marginBottom: 10 },

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withDelay, withTiming } from 'react-native-reanimated';
 import { BlockType } from '../types/game';
 import { BLOCK_IMAGES } from '../constants/assets';
 import { CRACK_IMAGES } from '../constants/assets';
@@ -11,10 +12,12 @@ interface BlockItemProps {
     currentHealth: number;
     maxHealth: number;
     isDestroyed?: boolean;
+    breakDelay?: number;
 }
 
-export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed }: BlockItemProps) => {
+export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed, breakDelay = 0 }: BlockItemProps) => {
     const imageSource = BLOCK_IMAGES[type];
+    const opacity = useSharedValue(isDestroyed && !breakDelay ? 0 : 1);
 
     // Cálculo del porcentaje de vida (0.0 a 1.0)
     const healthPercentage = currentHealth / maxHealth;
@@ -22,31 +25,39 @@ export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed }:
     // Lógica de decisión de grietas
     let overlaySource = null;
 
-    // Si la vida es 0 o menos, asumimos destruido.
-    // Retornamos una View vacía del mismo tamaño para no romper el Grid
-    if (currentHealth <= 0) {
-        return <View style={{ width: size, height: size }} />;
-    }
+    useEffect(() => {
+        // RESET opacity to 1 initially to ensure it's visible while waiting for delay
+        opacity.value = 1;
+
+        if (breakDelay > 0) {
+            // Schedule destruction
+            opacity.value = withDelay(breakDelay, withTiming(0, { duration: 100 }));
+        }
+        else if (isDestroyed) {
+            opacity.value = 0;
+        }
+    }, [isDestroyed, breakDelay]);
+
+    const animatedStyle = useAnimatedStyle(() => {
+        return { opacity: opacity.value };
+    });
+
     // Si tiene menos del 66% de vida pero más del 33%, grieta leve
     if (healthPercentage <= 0.66 && healthPercentage > 0.33) {
         overlaySource = CRACK_IMAGES.state1;
     }
-    // Si tiene menos del 33% de vida, grieta severa
-    else if (healthPercentage <= 0.33 && healthPercentage > 0) {
+    // Si tiene menos del 33% de vida (o 0 esperando desaparecer), grieta severa
+    else if (healthPercentage <= 0.33) {
         overlaySource = CRACK_IMAGES.state2;
     }
 
     return (
-        <View style={[styles.container, { width: size, height: size }]}>
-
-
+        <Animated.View style={[styles.container, { width: size, height: size }, animatedStyle]}>
             <Image
                 source={imageSource}
                 style={styles.image}
                 resizeMode="contain"
             />
-
-
             {overlaySource && (
                 <Image
                     source={overlaySource}
@@ -54,8 +65,7 @@ export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed }:
                     resizeMode="contain"
                 />
             )}
-
-        </View>
+        </Animated.View>
     );
 };
 
