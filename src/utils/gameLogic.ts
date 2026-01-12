@@ -131,12 +131,17 @@ export const applyTntDamage = (currentGrid: Block[][], col: number, damage: numb
         for (let c = Math.max(0, col - 1); c <= Math.min(GRID_COLS - 1, col + 1); c++) {
             const r = findTopBlockIndex(newGrid, c);
             if (r !== -1) {
-                const block = newGrid[r][c];
-                block.currentHealth -= damage;
-                if (block.currentHealth <= 0) {
-                    block.currentHealth = 0;
-                    block.isDestroyed = true;
-                    moneyEarned += block.value;
+                // Check vertical proximity. Only hit if the block is within 1 row of the TNT center.
+                // This prevents TNT from destroying blocks at the bottom of a deep adjacent column 
+                // when the TNT is high up (or vice versa).
+                if (Math.abs(r - hitRow) <= 1) {
+                    const block = newGrid[r][c];
+                    block.currentHealth -= damage;
+                    if (block.currentHealth <= 0) {
+                        block.currentHealth = 0;
+                        block.isDestroyed = true;
+                        moneyEarned += block.value;
+                    }
                 }
             }
         }

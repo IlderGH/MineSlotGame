@@ -1,15 +1,28 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Dimensions, SafeAreaView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { StyleSheet, Text, View, Dimensions, SafeAreaView, TouchableOpacity, TextInput, Alert, ImageBackground, Image } from 'react-native';
 import { BlockItem } from './src/components/BlockItem';
 import { ToolItem } from './src/components/ToolItem';
+import { WinAnimation } from './src/components/WinAnimation';
 import { GRID_COLS, TOOL_HIT_DURATION, ENTRANCE_DURATION, PRESENTATION_DURATION } from './src/constants/gameRules';
 import { useGame } from './src/hooks/useGame';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+
+import * as SplashScreen from 'expo-splash-screen'; // <--- Importar esto
+import { useFonts } from 'expo-font';               // <--- Importar esto
+
+SplashScreen.preventAutoHideAsync();
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = (width - 30) / GRID_COLS;
 
 export default function App() {
+
+  // 1. Hook para cargar fuentes
+  const [fontsLoaded] = useFonts({
+    // 'NombreQueUsaras': require('RutaDelArchivo')
+    'Minecraft': require('./src/assets/fonts/minecraft_font.ttf'),
+  });
+
   const {
     grid, tools, multipliers,
     betAmount, spinsRemaining, totalWin,
@@ -17,6 +30,21 @@ export default function App() {
     isAnimating
   } = useGame();
 
+  // 2. Efecto para ocultar el Splash Screen cuando la fuente esté lista
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded) {
+      await SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  // 3. Si la fuente no ha cargado, no renderizamos nada todavía
+  if (!fontsLoaded) {
+    return null;
+  }
+
+
+
+  /* Removed showWinAnim state and effect to prevent flashes. WinAnimation is now the primary view for wins. */
   const [inputBet, setInputBet] = useState('');
 
   // Calculate destruction delays map for efficient lookup during render
@@ -28,8 +56,8 @@ export default function App() {
           if (slot.tool && slot.plannedPath) {
             slot.plannedPath.forEach((gridRow, stepIndex) => {
               // TNT: Drop (400) + Prime(400) + Explode(100+) -> Break at ~900ms (1.1-1.2x)
-              // Pickaxe: Swing ends at 0.7-0.8. Break at 0.85.
-              const hitOffsetRatio = slot.tool?.type === 'tnt' ? 1.2 : 0.85;
+              // Pickaxe: Swing hits at ~600ms (0.75). We want break slightly early/on-time. 0.7 feels good.
+              const hitOffsetRatio = slot.tool?.type === 'tnt' ? 1.2 : 0.7;
               // Add PRESENTATION_DURATION to sync with tool Pause
               const impactTime = (slot.startDelay || 0) + ENTRANCE_DURATION + PRESENTATION_DURATION + (stepIndex * TOOL_HIT_DURATION) + (TOOL_HIT_DURATION * hitOffsetRatio);
 
@@ -62,136 +90,155 @@ export default function App() {
     );
   };
 
+
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
-
-      {gameState === 'BETTING' && (
-        <View style={styles.centerContent}>
-          <Text style={styles.title}>MineSlot</Text>
-          <Text style={styles.subtitle}>Ingresa tu apuesta</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="$0"
-            placeholderTextColor="#888"
-            keyboardType="numeric"
-            value={inputBet}
-            onChangeText={setInputBet}
-          />
-          <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={handleStart}>
-            <Text style={styles.buttonText}>JUGAR</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {gameState === 'PLAYING' && (
-        <>
-          <View style={styles.header}>
-            <Text style={styles.infoText}>Apuesta: ${betAmount}</Text>
-            <Text style={styles.infoText}>Tiros: {spinsRemaining}</Text>
+    <ImageBackground source={require('./src/assets/fondo1.png')} style={styles.container} resizeMode="cover">
+      <SafeAreaView style={styles.safeArea} onLayout={onLayoutRootView}>
+        <StatusBar style="light" />
+        {gameState === 'BETTING' && (
+          <View style={styles.centerContent}>
+            <Image
+              source={require('./src/assets/LogoTitulo.png')} // <--- Asegúrate que el nombre coincida
+              style={styles.gameLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.subtitle}>Ingresa tu apuesta</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="$0"
+              placeholderTextColor="#888"
+              keyboardType="numeric"
+              value={inputBet}
+              onChangeText={setInputBet}
+            />
+            <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={handleStart}>
+              <Text style={styles.buttonText}>JUGAR</Text>
+            </TouchableOpacity>
           </View>
+        )}
 
-          {/* Herramientas */}
-          <View style={styles.toolsContainer}>
-            {tools.map((row, rowIndex) => (
-              <View key={rowIndex} style={[styles.toolsRow, { zIndex: tools.length - rowIndex, elevation: tools.length - rowIndex }]}>
-                {row.map((slot, colIndex) => {
-                  const itemKey = slot.tool ? slot.tool.id : `empty-${rowIndex}-${colIndex}`;
+        {gameState === 'PLAYING' && (
+          <>
+            <View style={styles.header}>
+              <Text style={styles.infoText}>Apuesta: ${betAmount}</Text>
+              <Text style={styles.infoText}>Tiros: {spinsRemaining}</Text>
+            </View>
 
-                  if (!slot.tool) return <ToolItem key={itemKey} tool={null} size={ITEM_SIZE} />;
+            {/* Herramientas */}
+            <View style={styles.toolsContainer}>
+              {tools.map((row, rowIndex) => (
+                <View key={rowIndex} style={[styles.toolsRow, { zIndex: tools.length - rowIndex, elevation: tools.length - rowIndex }]}>
+                  {row.map((slot, colIndex) => {
+                    const itemKey = slot.tool ? slot.tool.id : `empty-${rowIndex}-${colIndex}`;
 
-                  const rowPath = slot.plannedPath || [];
-                  const rowsBelow = (tools.length - 1) - rowIndex;
-                  const extraDistance = rowsBelow * ITEM_SIZE;
+                    if (!slot.tool) return <ToolItem key={itemKey} tool={null} size={ITEM_SIZE} />;
+
+                    const rowPath = slot.plannedPath || [];
+                    const rowsBelow = (tools.length - 1) - rowIndex;
+                    const extraDistance = rowsBelow * ITEM_SIZE;
 
 
-                  const pathOffsets = rowPath.map(gridRowIndex => {
-                    return 60 + (gridRowIndex * ITEM_SIZE) + extraDistance;
-                  });
+                    const pathOffsets = rowPath.map(gridRowIndex => {
+                      return 60 + (gridRowIndex * ITEM_SIZE) + extraDistance;
+                    });
 
-                  return (
-                    <ToolItem
-                      key={itemKey}
-                      tool={slot.tool}
+                    return (
+                      <ToolItem
+                        key={itemKey}
+                        tool={slot.tool}
+                        size={ITEM_SIZE}
+                        pathOffsets={pathOffsets}
+                        startDelay={slot.startDelay}
+                      />
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.separator} />
+
+            {/* Grid de Bloques */}
+            <View style={styles.gridContainer}>
+              {grid.map((row, rowIndex) => (
+                <View key={rowIndex} style={styles.row}>
+                  {row.map((block) => (
+                    <BlockItem
+                      key={block.id}
+                      type={block.type}
+                      currentHealth={block.currentHealth}
+                      maxHealth={block.maxHealth}
+                      isDestroyed={block.isDestroyed}
                       size={ITEM_SIZE}
-                      pathOffsets={pathOffsets}
-                      startDelay={slot.startDelay}
                     />
-                  );
-                })}
-              </View>
-            ))}
-          </View>
+                  ))}
+                </View>
+              ))}
+            </View>
 
-          <View style={styles.separator} />
+            {/* Multiplicadores */}
+            <View style={styles.multipliersRow}>
+              {multipliers.map((mult, index) => (
+                <View key={index} style={[styles.multBox, { width: ITEM_SIZE }]}>
+                  <Text style={styles.multText}>x{mult}</Text>
+                </View>
+              ))}
+            </View>
 
-          {/* Grid de Bloques */}
-          <View style={styles.gridContainer}>
-            {grid.map((row, rowIndex) => (
-              <View key={rowIndex} style={styles.row}>
-                {row.map((block) => (
-                  <BlockItem
-                    key={block.id}
-                    type={block.type}
-                    currentHealth={block.currentHealth}
-                    maxHealth={block.maxHealth}
-                    isDestroyed={block.isDestroyed}
-                    size={ITEM_SIZE}
-                  />
-                ))}
-              </View>
-            ))}
-          </View>
+            <View style={styles.controls}>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#f44336' }, isAnimating && styles.buttonDisabled]}
+                onPress={resetGame}
+                disabled={isAnimating}
+              >
+                <Text style={styles.buttonText}>SALIR</Text>
+              </TouchableOpacity>
 
-          {/* Multiplicadores */}
-          <View style={styles.multipliersRow}>
-            {multipliers.map((mult, index) => (
-              <View key={index} style={[styles.multBox, { width: ITEM_SIZE }]}>
-                <Text style={styles.multText}>x{mult}</Text>
-              </View>
-            ))}
-          </View>
+              <TouchableOpacity
+                style={[styles.button, isAnimating && styles.buttonDisabled]}
+                onPress={spin}
+                disabled={isAnimating}
+              >
+                <Text style={styles.buttonText}>GIRAR</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
-          <View style={styles.controls}>
-            <TouchableOpacity
-              style={[styles.button, { backgroundColor: '#f44336' }, isAnimating && styles.buttonDisabled]}
-              onPress={resetGame}
-              disabled={isAnimating}
-            >
-              <Text style={styles.buttonText}>SALIR</Text>
-            </TouchableOpacity>
+        {gameState === 'FINISHED' && (
+          totalWin > 0 ? (
+            <WinAnimation
+              multipliers={multipliers}
+              betAmount={betAmount}
+              onReset={resetGame}
+            />
+          ) : (
+            <View style={styles.centerContent}>
+              <Text style={styles.title}>¡Juego Terminado!</Text>
+              <Text style={styles.resultText}>Suerte para la proxima!</Text>
 
-            <TouchableOpacity
-              style={[styles.button, isAnimating && styles.buttonDisabled]}
-              onPress={spin}
-              disabled={isAnimating}
-            >
-              <Text style={styles.buttonText}>GIRAR</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+              <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={resetGame}>
+                <Text style={styles.buttonText}>INTENTAR DE NUEVO</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        )}
 
-      {gameState === 'FINISHED' && (
-        <View style={styles.centerContent}>
-          <Text style={styles.title}>¡Juego Terminado!</Text>
-          <Text style={styles.resultText}>Ganaste:</Text>
-          <Text style={[styles.moneyText, { fontSize: 50 }]}>${totalWin}</Text>
-
-          <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={resetGame}>
-            <Text style={styles.buttonText}>JUGAR DE NUEVO</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-    </SafeAreaView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  safeArea: {
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -202,28 +249,29 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 40,
-    fontWeight: 'bold',
+    fontFamily: 'Minecraft',
     color: '#FFD700',
     marginBottom: 20,
     textTransform: 'uppercase',
-    fontFamily: 'monospace',
   },
   subtitle: {
     fontSize: 18,
-    color: '#ccc',
+    color: '#525252',
+    fontFamily: 'Minecraft',
     marginBottom: 10,
   },
   input: {
-    backgroundColor: '#222',
-    color: 'white',
+    backgroundColor: '#E7E6E0',
+    color: '#525252',
     fontSize: 24,
     padding: 15,
     width: '60%',
-    borderRadius: 10,
+    borderRadius: 5,
     textAlign: 'center',
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#444'
+    borderWidth: 3,
+    borderColor: '#737373',
+    fontFamily: 'Minecraft',
   },
   header: {
     flexDirection: 'row',
@@ -231,17 +279,21 @@ const styles = StyleSheet.create({
     width: '90%',
     marginBottom: 10,
     marginTop: 30, // SafeArea spacing
-    zIndex: 102,
+    zIndex: 2000, // Ensure header is ALWAYS on top of flying tools (zIndex 100)
+    elevation: 2000,
+    backgroundColor: '#121212', // Opaque background to hide tools passing under? Or transparent?
+    // User said "appear above". Transparent is fine if tools are truly behind. 
+    // If tools slide "over" the area, we need higher Z. 
   },
   infoText: {
     color: 'white',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Minecraft',
   },
   moneyText: {
     color: '#00FF00',
     fontSize: 30,
-    fontWeight: 'bold',
+    fontFamily: 'Minecraft',
   },
   resultText: {
     color: 'white',
@@ -288,27 +340,38 @@ const styles = StyleSheet.create({
   },
   multText: {
     color: '#FFA500',
-    fontWeight: 'bold',
     fontSize: 16,
+    fontFamily: 'Minecraft',
   },
 
   controls: { flexDirection: 'row', gap: 20 },
   button: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#05DF72',
     paddingVertical: 15,
     paddingHorizontal: 40,
     borderRadius: 10,
     elevation: 5,
+    fontFamily: 'Minecraft',
   },
   buttonStart: {
-    backgroundColor: '#4CAF50',
-    width: '60%',
+    backgroundColor: '#05DF72',
+    width: '70%',
     alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 60,
+    paddingVertical: 25,
+    paddingHorizontal: 50,
+    marginVertical: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#737373',
+    fontFamily: 'Minecraft',
   },
   buttonDisabled: { backgroundColor: '#555' },
-  buttonText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  buttonText: { color: '#F8FAFC', fontSize: 19, fontFamily: 'Minecraft' },
 
+  gameLogo: {
+    width: '80%',    // Ocupa el 80% del ancho de la pantalla
+    height: 300,     // Ajusta esta altura según tu imagen
+    marginBottom: 5,
+  },
 
 });

@@ -192,7 +192,7 @@ export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolI
                 <Animated.View style={flashStyle} />
 
                 {/* Badge logic: Show only if real tool is finalized and spinning stopped */}
-                {tool && !isSpinning && tool.type !== 'tnt' && (
+                {tool && !isSpinning && tool.type !== 'tnt' && tool.type !== 'eye' && (
                     <Animated.View style={styles.badgeContainer}>
                         <Text style={styles.badgeText}>x{tool.uses}</Text>
                     </Animated.View>

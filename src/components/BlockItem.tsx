@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withDelay, withTiming } from 'react-native-reanimated';
 import { BlockType } from '../types/game';
@@ -19,6 +19,9 @@ export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed, b
     const imageSource = BLOCK_IMAGES[type];
     const opacity = useSharedValue(isDestroyed && !breakDelay ? 0 : 1);
 
+    // Prevent re-triggering animation on re-renders (which caused "Reappear then Break Late" bug)
+    const destructionTriggered = useRef(false);
+
     // Cálculo del porcentaje de vida (0.0 a 1.0)
     const healthPercentage = currentHealth / maxHealth;
 
@@ -26,15 +29,19 @@ export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed, b
     let overlaySource = null;
 
     useEffect(() => {
-        // RESET opacity to 1 initially to ensure it's visible while waiting for delay
-        opacity.value = 1;
-
+        // Only run animation ONCE per block lifecycle
         if (breakDelay > 0) {
-            // Schedule destruction
-            opacity.value = withDelay(breakDelay, withTiming(0, { duration: 100 }));
+            if (!destructionTriggered.current) {
+                destructionTriggered.current = true;
+                opacity.value = 1; // Ensure visible start
+                // Schedule destruction
+                opacity.value = withDelay(breakDelay, withTiming(0, { duration: 50 }));
+            }
         }
-        else if (isDestroyed) {
+        // Fallback: If no delay provided (Instant) or logic updated without animation
+        else if (isDestroyed && !destructionTriggered.current) {
             opacity.value = 0;
+            destructionTriggered.current = true;
         }
     }, [isDestroyed, breakDelay]);
 

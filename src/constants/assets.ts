@@ -8,6 +8,7 @@ export const BLOCK_IMAGES: Record<BlockType, any> = {
     iron_ore: require("../assets/blocks/iron.png"), // Asegúrate que coincida con tus nombres de archivo
     gold_ore: require("../assets/blocks/oro.png"),
     diamond_ore: require("../assets/blocks/diamond.png"),
+    obsidian: require("../assets/blocks/obsidian.png"),
 };
 
 export const TOOL_IMAGES: Record<ToolType, any> = {
@@ -16,6 +17,7 @@ export const TOOL_IMAGES: Record<ToolType, any> = {
     gold: require("../assets/tools/pico_oro.png"),
     diamond: require("../assets/tools/pico_diamante.png"),
     tnt: require("../assets/tools/TNT.png"),
+    eye: require("../assets/tools/ojo.png"),
 };
 
 export const CRACK_IMAGES = {

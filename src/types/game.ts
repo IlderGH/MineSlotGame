@@ -1,6 +1,8 @@
 // src/types/game.ts
 
-export type ToolType = 'wood' | 'stone' | 'gold' | 'diamond' | 'tnt';
+export type BlockType = 'dirt' | 'stone' | 'iron_ore' | 'gold_ore' | 'diamond_ore' | 'obsidian';
+
+export type ToolType = 'wood' | 'stone' | 'gold' | 'diamond' | 'tnt' | 'eye';
 
 export interface Tool {
     id: string; // Identificador único
@@ -9,7 +11,7 @@ export interface Tool {
     damagePerHit: number; // Cuánto quita por golpe
 }
 
-export type BlockType = 'dirt' | 'stone' | 'iron_ore' | 'gold_ore' | 'diamond_ore';
+
 
 export interface Block {
     id: string;
