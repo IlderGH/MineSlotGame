@@ -130,8 +130,13 @@ export const useGame = () => {
                     if (!tool) return;
 
                     const delay = slot.startDelay || 0;
-                    const uses = tool.type === 'tnt' ? 1 : tool.uses;
-                    const duration = uses * TOOL_HIT_DURATION;
+                    let duration;
+                    if (tool.type === 'tnt') {
+                        // Si la TNT no rompe nada, solo desvanece rápido (300ms). Si rompe, explosión completa (1200ms).
+                        duration = slot.plannedPath.length > 0 ? 1200 : 300;
+                    } else {
+                        duration = slot.plannedPath.length * TOOL_HIT_DURATION;
+                    }
                     // Sync logic update with visual animation start (Entrance + Presentation)
                     // Add extra buffer (800ms) to ensure Visuals (controlled by App.tsx breakDelay) happen FIRST.
                     // This prevents strict Reference Checks from killing the block before the animation hits.

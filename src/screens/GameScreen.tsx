@@ -13,7 +13,10 @@ import { useFonts } from 'expo-font';               // <--- Importar esto
 SplashScreen.preventAutoHideAsync();
 
 const { width } = Dimensions.get('window');
-const ITEM_SIZE = (width - 30) / GRID_COLS;
+// Para cambiar el tamaño, ajusta el número restado al ancho (actualmente 60).
+// Un número MAYOR (ej. 80) hará los bloques más PEQUEÑOS.
+// Un número MENOR (ej. 30) los hará más GRANDES.
+const ITEM_SIZE = (width - 60) / GRID_COLS;
 
 export default function GameScreen({ navigation }: any) {
 
@@ -52,7 +55,6 @@ export default function GameScreen({ navigation }: any) {
                 });
             });
         }
-        console.log(`[App] Calculated ${Object.keys(delays).length} destruction delays.`);
         return delays;
     }, [tools, grid, gameState]);
 
@@ -101,7 +103,7 @@ export default function GameScreen({ navigation }: any) {
                             style={styles.infoLink}
                             onPress={() => navigation.navigate('Info')} // <--- Esto hace la magia
                         >
-                            <Text style={styles.infoLinkText}>+ Agregar Información</Text>
+                            <Text style={styles.infoLinkText}>+ README</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -109,7 +111,7 @@ export default function GameScreen({ navigation }: any) {
                 {gameState === 'PLAYING' && (
                     <>
                         <View style={styles.header}>
-                            <Text style={styles.infoText}>Apuesta: ${betAmount}</Text>
+                            <Text style={styles.infoText}>Apuesta: $ {betAmount}</Text>
                             <Text style={styles.infoText}>Tiros: {spinsRemaining}</Text>
                         </View>
 
@@ -120,25 +122,31 @@ export default function GameScreen({ navigation }: any) {
                                     {row.map((slot, colIndex) => {
                                         const itemKey = slot.tool ? slot.tool.id : `empty-${rowIndex}-${colIndex}`;
 
-                                        if (!slot.tool) return <ToolItem key={itemKey} tool={null} size={ITEM_SIZE} />;
+                                        if (!slot.tool) {
+                                            return (
+                                                <View key={itemKey} style={[styles.slot, { width: ITEM_SIZE, height: ITEM_SIZE }]}>
+                                                    <ToolItem tool={null} size={ITEM_SIZE} />
+                                                </View>
+                                            );
+                                        }
 
                                         const rowPath = slot.plannedPath || [];
                                         const rowsBelow = (tools.length - 1) - rowIndex;
                                         const extraDistance = rowsBelow * ITEM_SIZE;
-
 
                                         const pathOffsets = rowPath.map(gridRowIndex => {
                                             return 60 + (gridRowIndex * ITEM_SIZE) + extraDistance;
                                         });
 
                                         return (
-                                            <ToolItem
-                                                key={itemKey}
-                                                tool={slot.tool}
-                                                size={ITEM_SIZE}
-                                                pathOffsets={pathOffsets}
-                                                startDelay={slot.startDelay}
-                                            />
+                                            <View key={itemKey} style={[styles.slot, { width: ITEM_SIZE, height: ITEM_SIZE }]}>
+                                                <ToolItem
+                                                    tool={slot.tool}
+                                                    size={ITEM_SIZE}
+                                                    pathOffsets={pathOffsets}
+                                                    startDelay={slot.startDelay}
+                                                />
+                                            </View>
                                         );
                                     })}
                                 </View>
@@ -269,15 +277,19 @@ const styles = StyleSheet.create({
         marginTop: 30, // SafeArea spacing
         zIndex: 2000, // Ensure header is ALWAYS on top of flying tools (zIndex 100)
         elevation: 2000,
-        backgroundColor: '#121212', // Opaque background to hide tools passing under? Or transparent?
-        // User said "appear above". Transparent is fine if tools are truly behind. 
-        // If tools slide "over" the area, we need higher Z. 
     },
     infoText: {
-        color: 'white',
-        fontSize: 18,
+        backgroundColor: '#E7E6E0',
+        borderColor: '#737373',
+        borderWidth: 3,
+        borderRadius: 5,
+        padding: 10,
+        paddingHorizontal: 20,
+        color: '#525252',
+        fontSize: 13,
         fontFamily: 'Minecraft',
     },
+
     moneyText: {
         color: '#00FF00',
         fontSize: 30,
@@ -289,23 +301,42 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     toolsContainer: {
-        position: 'relative', // Restore flow so it pushes grid down
-        width: '100%',
+        position: 'relative',
+        backgroundColor: '#ebebe8ff',
+        borderRadius: 5,
+        borderColor: '#737373',
+        borderWidth: 3,
+        paddingTop: 3,
+        paddingBottom: 3,
+        width: '95%',
         zIndex: 100, // Ensure tools are above grid for animation
         elevation: 100, // Android support
         overflow: 'visible',
-        marginBottom: 10,
-        // backgroundColor: 'rgba(255,0,0,0.2)', // Debug
     },
     toolsRow: {
         flexDirection: 'row',
-        backgroundColor: '#333',
         justifyContent: 'center',
         width: '100%',
-        marginBottom: 5, // Spacing between tool rows
-        overflow: 'visible' // Ensure tools dropping out of row aren't clipped
+        margin: 1,
+        overflow: 'visible'
     },
-    separator: { height: 2, width: '90%', backgroundColor: '#555', marginBottom: 10 },
+    slot: {
+        backgroundColor: '#bebebeff',
+        margin: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 0,
+        // Dando profundidad (Efecto Hundido)
+        borderTopWidth: 2,
+        borderTopColor: '#373737', // Sombra Superior
+        borderLeftWidth: 2,
+        borderLeftColor: '#373737', // Sombra Izquierda
+        borderBottomWidth: 2,
+        borderBottomColor: '#ffffff', // Brillo Inferior
+        borderRightWidth: 2,
+        borderRightColor: '#ffffff', // Brillo Derecho
+    },
+    separator: { height: 2, width: '90%', backgroundColor: '#555', marginBottom: 10, marginTop: 10 },
     gridContainer: {
         marginBottom: 5,
         zIndex: 0,
@@ -322,13 +353,13 @@ const styles = StyleSheet.create({
         height: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#2A2A2A',
-        borderWidth: 1,
-        borderColor: '#444',
+        backgroundColor: '#373737',
+        borderWidth: 2,
+        borderColor: '#bebebeff',
     },
     multText: {
-        color: '#FFA500',
-        fontSize: 16,
+        color: '#ffae00ff',
+        fontSize: 18,
         fontFamily: 'Minecraft',
     },
 
@@ -337,9 +368,17 @@ const styles = StyleSheet.create({
         backgroundColor: '#05DF72',
         paddingVertical: 15,
         paddingHorizontal: 40,
-        borderRadius: 10,
+        borderRadius: 6,
         elevation: 5,
-        fontFamily: 'Minecraft',
+        // Efecto Relieve (Botón 3D)
+        borderTopWidth: 2,
+        borderTopColor: 'rgba(255,255,255,0.5)',
+        borderLeftWidth: 2,
+        borderLeftColor: 'rgba(255,255,255,0.5)',
+        borderBottomWidth: 4,
+        borderBottomColor: 'rgba(0,0,0,0.3)',
+        borderRightWidth: 4,
+        borderRightColor: 'rgba(0,0,0,0.3)',
     },
     buttonStart: {
         backgroundColor: '#05DF72',
@@ -363,6 +402,6 @@ const styles = StyleSheet.create({
     },
 
     infoLink: { marginTop: 20 },
-    infoLinkText: { color: '#AAA', textDecorationLine: 'underline', fontSize: 16 }
+    infoLinkText: { color: '#525252', fontSize: 18, fontFamily: 'Minecraft' }
 
 });

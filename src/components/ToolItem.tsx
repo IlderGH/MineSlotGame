@@ -23,7 +23,7 @@ interface ToolItemProps {
 
 const TOOL_TYPES = Object.keys(TOOL_IMAGES) as ToolType[];
 
-export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolItemProps) => {
+export const ToolItem = React.memo(({ tool, size, pathOffsets = [], startDelay = 0 }: ToolItemProps) => {
     // State for Slot Effect
     const [displayType, setDisplayType] = useState<ToolType>('wood');
     const [isSpinning, setIsSpinning] = useState(true);
@@ -62,7 +62,7 @@ export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolI
         const spinInterval = setInterval(() => {
             const randomType = TOOL_TYPES[Math.floor(Math.random() * TOOL_TYPES.length)];
             setDisplayType(randomType);
-        }, 120); // Slower spin for visibility
+        }, 200); // Slower spin to reduce JS thread load
 
         // 2. ENTRANCE SLIDE (Physical Movement)
         setZIndexState(1); // Low Z-index ensure inside "cell" feel
@@ -111,7 +111,6 @@ export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolI
             miningTimer = setTimeout(() => {
                 setOverflowState('visible');
                 setZIndexState(100); // Pop to top for mining action!
-                console.log('ToolItem: starting mining NOW');
 
                 if (pathOffsets.length === 0) {
                     opacity.value = withTiming(0, { duration: 300 });
@@ -140,11 +139,17 @@ export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolI
                     scale.value = withDelay(800, withTiming(5, { duration: 500, easing: Easing.out(Easing.quad) }));
                     opacity.value = withDelay(900, withTiming(0, { duration: 400 })); // Fade out mid-explosion
                 } else if (tool.uses > 0) {
+                    // "Deep Bounce" Animation per User Request
+                    // 1. Fall/Hit (Fast, 30%)
+                    // 2. Rise High (Slow, 70%, 1.5 blocks up)
+                    const fallDuration = HIT_DURATION * 0.3;
+                    const riseDuration = HIT_DURATION * 0.7;
+                    const bounceHeight = size * 1.3;
+
                     rotation.value = withRepeat(
                         withSequence(
-                            withTiming(-60, { duration: HIT_DURATION / 2 }),
-                            withTiming(90, { duration: HIT_DURATION / 4 }),
-                            withTiming(0, { duration: HIT_DURATION / 4 })
+                            withTiming(135, { duration: fallDuration, easing: Easing.in(Easing.quad) }), // Fall (Head points to block)
+                            withTiming(0, { duration: riseDuration, easing: Easing.out(Easing.quad) })   // Rise (Head back up)
                         ),
                         Math.min(tool.uses, pathOffsets.length),
                         false
@@ -152,8 +157,11 @@ export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolI
 
                     const sequence: any[] = [];
                     pathOffsets.forEach(target => {
-                        sequence.push(withTiming(target, { duration: HIT_DURATION * 0.3, easing: Easing.out(Easing.quad) }));
-                        sequence.push(withTiming(target, { duration: HIT_DURATION * 0.7 }));
+                        // 1. Fall to Target
+                        sequence.push(withTiming(target, { duration: fallDuration, easing: Easing.in(Easing.quad) }));
+
+                        // 2. Bounce Up High (1.5 blocks)
+                        sequence.push(withTiming(target - bounceHeight, { duration: riseDuration, easing: Easing.out(Easing.quad) }));
                     });
                     translateY.value = withSequence(...sequence);
 
@@ -200,7 +208,7 @@ export const ToolItem = ({ tool, size, pathOffsets = [], startDelay = 0 }: ToolI
             </Animated.View>
         </Animated.View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
@@ -222,14 +230,12 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 5,
         right: 5,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        borderRadius: 12,
         paddingHorizontal: 6,
         paddingVertical: 2,
     },
     badgeText: {
-        color: 'white',
-        fontSize: 10,
+        color: '#525252',
+        fontSize: 13,
         fontWeight: 'bold',
     }
 });

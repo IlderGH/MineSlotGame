@@ -166,9 +166,8 @@ export const WinAnimation = ({ multipliers, betAmount, onReset }: WinAnimationPr
                 <Animated.View style={[styles.resultBox, resultStyle]}>
                     <View style={styles.divider} />
                     <View style={styles.equationRow}>
-                        <Text style={styles.eqText}>${betAmount}</Text>
-                        <Text style={styles.eqOp}> x </Text>
-                        <Text style={[styles.eqText, { color: '#FFA500' }]}>{totalMultiplier}</Text>
+                        <Text style={styles.eqText}>Monto Apostado:</Text>
+                        <Text style={styles.eqText}>$ {betAmount}</Text>
                     </View>
                     <Text style={styles.winLabel}>GANANCIA</Text>
                     <Text style={styles.finalWinText}>${totalWin}</Text>
@@ -212,7 +211,7 @@ const styles = StyleSheet.create({
         height: 40,
         backgroundColor: '#222',
         borderWidth: 2,
-        borderColor: '#FFA500',
+        borderColor: '#ffb325ff',
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 8,
@@ -230,6 +229,12 @@ const styles = StyleSheet.create({
     centerContainer: {
         alignItems: 'center',
         width: '80%',
+        backgroundColor: '#ebebe8ff',
+        borderRadius: 15,
+        borderColor: '#737373',
+        borderWidth: 5,
+        paddingTop: 20,
+        paddingBottom: 20,
         zIndex: 1,
     },
     sumWrapper: {
@@ -244,20 +249,16 @@ const styles = StyleSheet.create({
     },
     sumText: {
         color: '#FFA500',
-        fontSize: 80,
-        fontWeight: 'bold',
+        fontSize: 60,
+        fontFamily: 'Minecraft',
         textShadowColor: 'rgba(255, 165, 0, 0.5)',
         textShadowOffset: { width: 0, height: 0 },
         textShadowRadius: 20
     },
     resultBox: {
-        width: '100%',
+        width: '90%',
         alignItems: 'center',
-        backgroundColor: '#1a1a1a',
         padding: 20,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#333'
     },
     divider: {
         height: 1,
@@ -266,7 +267,8 @@ const styles = StyleSheet.create({
         marginBottom: 15
     },
     equationRow: {
-        flexDirection: 'row',
+        flexDirection: 'column',
+        fontFamily: 'Minecraft',
         alignItems: 'center',
         marginBottom: 10
     },
@@ -299,21 +301,25 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     button: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: '#05DF72',
         paddingVertical: 15,
         paddingHorizontal: 40,
-        borderRadius: 25,
+        borderRadius: 6,
         elevation: 5,
-        shadowColor: '#4CAF50',
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
-        width: '80%',
-        alignItems: 'center'
+        // Efecto Relieve (Botón 3D)
+        borderTopWidth: 2,
+        borderTopColor: 'rgba(255,255,255,0.5)',
+        borderLeftWidth: 2,
+        borderLeftColor: 'rgba(255,255,255,0.5)',
+        borderBottomWidth: 4,
+        borderBottomColor: 'rgba(0,0,0,0.3)',
+        borderRightWidth: 4,
+        borderRightColor: 'rgba(0,0,0,0.3)',
     },
     buttonText: {
         color: 'white',
         fontSize: 18,
-        fontWeight: 'bold',
+        fontFamily: 'Minecraft',
         letterSpacing: 1
     }
 });

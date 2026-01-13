@@ -26,7 +26,7 @@ export const GRID_ROWS = 5;
 export const GRID_COLS = 5;
 
 // Duración de la animación de UN golpe (ms)
-export const TOOL_HIT_DURATION = 800;
+export const TOOL_HIT_DURATION = 900;
 export const ENTRANCE_DURATION = 700;
 export const PRESENTATION_DURATION = 800;
 

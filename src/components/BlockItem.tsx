@@ -68,7 +68,7 @@ export const BlockItem = ({ type, size, currentHealth, maxHealth, isDestroyed, b
             {overlaySource && (
                 <Image
                     source={overlaySource}
-                    style={[styles.image, styles.overlay]}
+                    style={[styles.image2, styles.overlay]}
                     resizeMode="contain"
                 />
             )}
@@ -84,6 +84,13 @@ const styles = StyleSheet.create({
         position: 'relative', // Importante para que los hijos absolutos se posicionen respecto a esto
     },
     image: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 3,
+        borderWidth: 1,
+        borderColor: '#333333ff',
+    },
+    image2: {
         width: '100%',
         height: '100%',
     },
