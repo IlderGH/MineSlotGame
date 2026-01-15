@@ -1,75 +1,283 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Alert, Modal, SafeAreaView, ImageBackground } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Dimensions, SafeAreaView, TouchableOpacity, TextInput, Alert, ImageBackground, Image } from 'react-native';
-import { BlockItem } from '../components/BlockItem';
-import { ToolItem } from '../components/ToolItem';
-import { WinAnimation } from '../components/WinAnimation';
-import { GRID_COLS, TOOL_HIT_DURATION, ENTRANCE_DURATION, PRESENTATION_DURATION } from '../constants/gameRules';
-import { useGame } from '../hooks/useGame';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { SLOT_IMAGES } from '../constants/assets';
+import { BET_LEVELS, PAYTABLE_BASE, GRID_ROWS as MINING_ROWS } from '../constants/gameRules';
+import { SlotSymbol } from '../components/SlotSymbol';
 
-import * as SplashScreen from 'expo-splash-screen'; // <--- Importar esto
-import { useFonts } from 'expo-font';               // <--- Importar esto
+// Config specific to this screen
+const SLOT_ROWS = 5;
+const SLOT_COLS = 6;
+const SYMBOLS = ['item_1', 'item_2', 'item_3', 'item_4', 'item_5', 'item_6', 'item_7', 'scatter'];
+const SYMBOL_WEIGHTS: Record<string, number> = {
+    'item_1': 50, 'item_2': 40, 'item_3': 30, 'item_4': 25,
+    'item_5': 15, 'item_6': 10, 'item_7': 4, 'scatter': 0.5
+};
 
-SplashScreen.preventAutoHideAsync();
+type SymbolStatus = 'falling' | 'idle' | 'winning' | 'disappearing';
 
-const { width } = Dimensions.get('window');
-// Para cambiar el tamaño, ajusta el número restado al ancho (actualmente 60).
-// Un número MAYOR (ej. 80) hará los bloques más PEQUEÑOS.
-// Un número MENOR (ej. 30) los hará más GRANDES.
-const ITEM_SIZE = (width - 60) / GRID_COLS;
+interface SlotCell {
+    id: string;
+    symbol: string;
+    status: SymbolStatus;
+    delay?: number; // For stagger
+}
+
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const getWeightedSymbol = (counts: Record<string, number>) => {
+    let pool = Object.keys(SYMBOL_WEIGHTS);
+    pool = pool.filter(k => {
+        const current = counts[k] || 0;
+        if (k === 'scatter') return current < 3;
+        return current < 8; // Limit to 8 (per generation step)
+    });
+
+    if (pool.length === 0) return 'item_1';
+
+    let totalWeight = 0;
+    pool.forEach(k => totalWeight += SYMBOL_WEIGHTS[k]);
+
+    let random = Math.random() * totalWeight;
+    for (const key of pool) {
+        random -= SYMBOL_WEIGHTS[key];
+        if (random <= 0) return key;
+    }
+    return pool[0];
+};
+
+const { width, height } = Dimensions.get('window');
+const ITEM_SIZE = (width - 60) / SLOT_COLS;
 
 export default function GameScreen({ navigation }: any) {
+    const [credits, setCredits] = useState(1000);
+    const [betIndex, setBetIndex] = useState(0);
+    const [grid, setGrid] = useState<SlotCell[][]>([]);
+    const [isSpinning, setIsSpinning] = useState(false);
+    const [winAmount, setWinAmount] = useState(0);
 
-    const {
-        grid, tools, multipliers,
-        betAmount, spinsRemaining, totalWin,
-        gameState, startGame, resetGame, spin,
-        isAnimating
-    } = useGame();
+    // Initial Fill
+    useEffect(() => {
+        fillInitialGrid();
+    }, []);
 
+    const currentBet = BET_LEVELS[betIndex];
 
-
-    /* Removed showWinAnim state and effect to prevent flashes. WinAnimation is now the primary view for wins. */
-    const [inputBet, setInputBet] = useState('');
-
-    // Calculate destruction delays map for efficient lookup during render
-    const destructionDelays = useMemo(() => {
-        const delays: Record<string, number> = {};
-        if (gameState === 'PLAYING') {
-            tools.forEach((row, rowIndex) => {
-                row.forEach((slot, colIndex) => {
-                    if (slot.tool && slot.plannedPath) {
-                        slot.plannedPath.forEach((gridRow, stepIndex) => {
-                            // TNT: Drop (400) + Prime(400) + Explode(100+) -> Break at ~900ms (1.1-1.2x)
-                            // Pickaxe: Swing hits at ~600ms (0.75). We want break slightly early/on-time. 0.7 feels good.
-                            const hitOffsetRatio = slot.tool?.type === 'tnt' ? 1.2 : 0.7;
-                            // Add PRESENTATION_DURATION to sync with tool Pause
-                            const impactTime = (slot.startDelay || 0) + ENTRANCE_DURATION + PRESENTATION_DURATION + (stepIndex * TOOL_HIT_DURATION) + (TOOL_HIT_DURATION * hitOffsetRatio);
-
-                            if (grid[gridRow] && grid[gridRow][colIndex]) {
-                                const blockId = grid[gridRow][colIndex].id;
-                                delays[blockId] = impactTime;
-                            }
-                        });
-                    }
-                });
-            });
+    const fillInitialGrid = () => {
+        const newGrid: SlotCell[][] = [];
+        const counts: Record<string, number> = {};
+        for (let r = 0; r < SLOT_ROWS; r++) {
+            const row: SlotCell[] = [];
+            for (let c = 0; c < SLOT_COLS; c++) {
+                const sym = getWeightedSymbol(counts);
+                counts[sym] = (counts[sym] || 0) + 1;
+                row.push({ id: generateId(), symbol: sym, status: 'idle' });
+            }
+            newGrid.push(row);
         }
-        return delays;
-    }, [tools, grid, gameState]);
+        setGrid(newGrid);
+    };
 
-    const handleStart = () => {
-        const amount = parseInt(inputBet);
-        if (isNaN(amount) || amount <= 0) {
-            Alert.alert("Error", "Ingresa un monto válido");
+    const handleSpin = () => {
+        if (credits < currentBet) {
+            Alert.alert("Saldo insuficiente", "No tienes suficientes créditos.");
+            return;
+        }
+
+        setIsSpinning(true);
+        setCredits(prev => parseFloat((prev - currentBet).toFixed(2)));
+        setWinAmount(0);
+
+        // 1. Generate New Grid (All Falling)
+        const newGrid: SlotCell[][] = [];
+        const counts: Record<string, number> = {};
+
+        for (let r = 0; r < SLOT_ROWS; r++) {
+            const row: SlotCell[] = [];
+            for (let c = 0; c < SLOT_COLS; c++) {
+                const sym = getWeightedSymbol(counts);
+                counts[sym] = (counts[sym] || 0) + 1;
+                // Add stagger delay based on column (left to right) and row (top to bottom)?
+                // Visual preference: Column based usually looks good for slots.
+                // Let's do simple column stagger.
+                row.push({
+                    id: generateId(),
+                    symbol: sym,
+                    status: 'falling',
+                    delay: c * 50 // Stagger per column
+                });
+            }
+            newGrid.push(row);
+        }
+
+        setGrid(newGrid);
+
+        // Wait for Drop Animation to finish before checking wins
+        setTimeout(() => {
+            processGameLoop(newGrid);
+        }, 800);
+    };
+
+    const processGameLoop = async (currentGrid: SlotCell[][]) => {
+        // 1. Check Matches (Global Count >= 8)
+        const counts: Record<string, number> = {};
+        const winIds = new Set<string>();
+        let roundWin = 0;
+        const betRatio = currentBet / 0.20;
+
+        // Count symbols
+        currentGrid.flat().forEach(cell => {
+            counts[cell.symbol] = (counts[cell.symbol] || 0) + 1;
+        });
+
+        // Identify Winners
+        Object.keys(counts).forEach(sym => {
+            if (sym !== 'scatter' && counts[sym] >= 8) {
+                // Determine Win Value
+                if (PAYTABLE_BASE[sym]) {
+                    roundWin += PAYTABLE_BASE[sym] * betRatio;
+                }
+                // Mark IDs
+                currentGrid.flat().forEach(cell => {
+                    if (cell.symbol === sym) winIds.add(cell.id);
+                });
+            }
+        });
+
+        if (winIds.size > 0) {
+            // --- WIN SEQUENCE ---
+            setWinAmount(prev => prev + roundWin);
+            setCredits(prev => parseFloat((prev + roundWin).toFixed(2)));
+
+            // A. WIN ANIMATION (Pulse)
+            await new Promise(r => setTimeout(r, 1000)); // Pre-Win Delay
+
+            const winGrid = currentGrid.map(row => row.map(cell => ({
+                ...cell,
+                status: winIds.has(cell.id) ? 'winning' as SymbolStatus : 'idle' as SymbolStatus
+            })));
+            setGrid(winGrid);
+
+            // Wait for Pulse
+            await new Promise(r => setTimeout(r, 1500));
+
+            // B. DISAPPEAR ANIMATION (Expand/Fade)
+            const disappearGrid = winGrid.map(row => row.map(cell => ({
+                ...cell,
+                status: winIds.has(cell.id) ? 'disappearing' as SymbolStatus : cell.status
+            })));
+            setGrid(disappearGrid);
+
+            // Wait for Fade
+            await new Promise(r => setTimeout(r, 1000)); // Increased Pause
+
+            // C. CASCADE (Shift & Refill)
+            const filledGrid = performCascade(disappearGrid, winIds);
+            setGrid(filledGrid);
+
+            // Wait for Drop
+            await new Promise(r => setTimeout(r, 800)); // Increased Pause
+
+            // Recursion
+            processGameLoop(filledGrid);
+
+        } else {
+            // --- NO MORE WINS ---
+            setIsSpinning(false);
+
+            // Check Scatters
+            let scatters = 0;
+            currentGrid.flat().forEach(cell => {
+                if (cell.symbol === 'scatter') scatters++;
+            });
+
+            if (scatters >= 3) {
+                setTimeout(() => {
+                    Alert.alert("¡BONUS!", "¡3 Scatters! Entrando a la ronda de minería...", [
+                        { text: "Vamos", onPress: () => enterBonus(10) }
+                    ]);
+                }, 300);
+            }
+        }
+    };
+
+    const performCascade = (oldGrid: SlotCell[][], destroyedIds: Set<string>): SlotCell[][] => {
+        const newGrid: SlotCell[][] = Array(SLOT_ROWS).fill(null).map(() => []);
+        // Iterate Columns
+        for (let c = 0; c < SLOT_COLS; c++) {
+            const survived: SlotCell[] = [];
+            // Collect survivors from bottom up
+            for (let r = 0; r < SLOT_ROWS; r++) {
+                const cell = oldGrid[r][c];
+                if (!destroyedIds.has(cell.id)) {
+                    survived.push({ ...cell, status: 'idle', delay: 0 }); // Reset status
+                }
+            }
+
+            // How many missing?
+            const missing = SLOT_ROWS - survived.length;
+
+            // Generate new items for top
+            const counts: Record<string, number> = {};
+            // Note: Counts limiting per cascade is tricky if we don't know existing. 
+            // For simplicity, we just generate valid single items locally.
+            // Ideally we pass full grid context but let's approximate.
+
+            const newItems: SlotCell[] = [];
+            for (let i = 0; i < missing; i++) {
+                const sym = getWeightedSymbol({}); // Simple generation
+                newItems.push({
+                    id: generateId(),
+                    symbol: sym,
+                    status: 'falling',
+                    delay: c * 50 // Stagger
+                });
+            }
+
+            // Combine: New items on top, survivors on bottom
+            // In grid structure: Row 0 is top.
+            // So column result should be [...newItems, ...survived]
+            const fullColumn = [...newItems, ...survived];
+
+            // Assign to newGrid rows
+            for (let r = 0; r < SLOT_ROWS; r++) {
+                newGrid[r][c] = fullColumn[r];
+            }
+        }
+        return newGrid;
+    };
+
+    const enterBonus = (spins: number) => {
+        navigation.navigate('Funsion', { tiros: spins, apuesta: currentBet });
+    };
+
+    const changeBet = (direction: 'up' | 'down') => {
+        if (direction === 'up' && betIndex < BET_LEVELS.length - 1) {
+            setBetIndex(betIndex + 1);
+        } else if (direction === 'down' && betIndex > 0) {
+            setBetIndex(betIndex - 1);
+        }
+    };
+
+    const handleBuyFeature = () => {
+        const cost = currentBet * 100;
+        if (credits < cost) {
+            Alert.alert("Saldo insuficiente", `Necesitas $${cost.toFixed(2)} para comprar.`);
             return;
         }
 
         Alert.alert(
-            "¡Juego Iniciado!",
-            "Tienes 10 tiros para romper los bloques. ¡Buena suerte!",
+            "¿Comprar Función?",
+            `Costo: $${cost.toFixed(2)}`,
             [
-                { text: "¡Vamos!", onPress: () => startGame(amount) }
+                { text: "Cancelar", style: "cancel" },
+                {
+                    text: "Sí, Comprar",
+                    onPress: () => {
+                        setCredits(prev => parseFloat((prev - cost).toFixed(2)));
+                        navigation.navigate('EggSelection', { apuesta: currentBet });
+                    }
+                }
             ]
         );
     };
@@ -77,331 +285,225 @@ export default function GameScreen({ navigation }: any) {
 
 
     return (
-        <ImageBackground source={require('../assets/fondo1.png')} style={styles.container} resizeMode="cover">
-            <SafeAreaView style={styles.safeArea} >
+        <ImageBackground source={require('../assets/fondo1.png')} style={styles.container}>
+            <SafeAreaView style={styles.safeArea}>
                 <StatusBar style="light" />
-                {gameState === 'BETTING' && (
-                    <View style={styles.centerContent}>
-                        <Image
-                            source={require('../assets/LogoTitulo.png')} // <--- Asegúrate que el nombre coincida
-                            style={styles.gameLogo}
-                            resizeMode="contain"
-                        />
-                        <Text style={styles.subtitle}>Ingresa tu apuesta</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="$0"
-                            placeholderTextColor="#888"
-                            keyboardType="numeric"
-                            value={inputBet}
-                            onChangeText={setInputBet}
-                        />
-                        <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={handleStart}>
-                            <Text style={styles.buttonText}>JUGAR</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.infoLink}
-                            onPress={() => navigation.navigate('Info')} // <--- Esto hace la magia
-                        >
-                            <Text style={styles.infoLinkText}>+ README</Text>
-                        </TouchableOpacity>
+
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+                    <Text style={styles.backArrow}>{'<'}</Text>
+                </TouchableOpacity>
+
+                {/* Header */}
+                <View style={styles.header}>
+                    <View style={styles.badge}>
+                        <Text style={styles.badgeLabel}>CREDITS</Text>
+                        <Text style={styles.badgeValue}>$ {credits.toFixed(2)}</Text>
                     </View>
-                )}
+                    <View style={styles.badge}>
+                        <Text style={styles.badgeLabel}>WIN</Text>
+                        <Text style={styles.badgeValue}>$ {winAmount.toFixed(2)}</Text>
+                    </View>
+                </View>
 
-                {gameState === 'PLAYING' && (
-                    <>
-                        <View style={styles.header}>
-                            <Text style={styles.infoText}>Apuesta: $ {betAmount}</Text>
-                            <Text style={styles.infoText}>Tiros: {spinsRemaining}</Text>
-                        </View>
-
-                        {/* Herramientas */}
-                        <View style={styles.toolsContainer}>
-                            {tools.map((row, rowIndex) => (
-                                <View key={rowIndex} style={[styles.toolsRow, { zIndex: tools.length - rowIndex, elevation: tools.length - rowIndex }]}>
-                                    {row.map((slot, colIndex) => {
-                                        const itemKey = slot.tool ? slot.tool.id : `empty-${rowIndex}-${colIndex}`;
-
-                                        if (!slot.tool) {
-                                            return (
-                                                <View key={itemKey} style={[styles.slot, { width: ITEM_SIZE, height: ITEM_SIZE }]}>
-                                                    <ToolItem tool={null} size={ITEM_SIZE} />
-                                                </View>
-                                            );
-                                        }
-
-                                        const rowPath = slot.plannedPath || [];
-                                        const rowsBelow = (tools.length - 1) - rowIndex;
-                                        const extraDistance = rowsBelow * ITEM_SIZE;
-
-                                        const pathOffsets = rowPath.map(gridRowIndex => {
-                                            return 60 + (gridRowIndex * ITEM_SIZE) + extraDistance;
-                                        });
-
-                                        return (
-                                            <View key={itemKey} style={[styles.slot, { width: ITEM_SIZE, height: ITEM_SIZE }]}>
-                                                <ToolItem
-                                                    tool={slot.tool}
-                                                    size={ITEM_SIZE}
-                                                    pathOffsets={pathOffsets}
-                                                    startDelay={slot.startDelay}
-                                                />
-                                            </View>
-                                        );
-                                    })}
+                {/* Slot Grid */}
+                <View style={styles.gridContainer}>
+                    {grid.map((row, rIndex) => (
+                        <View key={rIndex} style={styles.row}>
+                            {row.map((cell, cIndex) => (
+                                <View key={`${cell.id}-${cIndex}`} style={[styles.cell, { width: ITEM_SIZE, height: ITEM_SIZE }]}>
+                                    <SlotSymbol
+                                        symbol={cell.symbol}
+                                        size={ITEM_SIZE * 0.8}
+                                        status={cell.status}
+                                        delay={cell.delay}
+                                        index={cIndex}
+                                    />
                                 </View>
                             ))}
                         </View>
+                    ))}
+                </View>
 
-                        <View style={styles.separator} />
-
-                        {/* Grid de Bloques */}
-                        <View style={styles.gridContainer}>
-                            {grid.map((row, rowIndex) => (
-                                <View key={rowIndex} style={styles.row}>
-                                    {row.map((block) => (
-                                        <BlockItem
-                                            key={block.id}
-                                            type={block.type}
-                                            currentHealth={block.currentHealth}
-                                            maxHealth={block.maxHealth}
-                                            isDestroyed={block.isDestroyed}
-                                            size={ITEM_SIZE}
-                                        />
-                                    ))}
-                                </View>
-                            ))}
-                        </View>
-
-                        {/* Multiplicadores */}
-                        <View style={styles.multipliersRow}>
-                            {multipliers.map((mult, index) => (
-                                <View key={index} style={[styles.multBox, { width: ITEM_SIZE }]}>
-                                    <Text style={styles.multText}>x{mult}</Text>
-                                </View>
-                            ))}
-                        </View>
-
-                        <View style={styles.controls}>
-                            <TouchableOpacity
-                                style={[styles.button, { backgroundColor: '#f44336' }, isAnimating && styles.buttonDisabled]}
-                                onPress={resetGame}
-                                disabled={isAnimating}
-                            >
-                                <Text style={styles.buttonText}>SALIR</Text>
+                {/* Controls */}
+                <View style={styles.controls}>
+                    <View style={styles.betControl}>
+                        <Text style={styles.controlLabel}>APUESTA</Text>
+                        <View style={styles.betSelector}>
+                            <TouchableOpacity onPress={() => changeBet('down')} style={styles.arrowBtn}>
+                                <Text style={styles.arrowText}>{'<'}</Text>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.button, isAnimating && styles.buttonDisabled]}
-                                onPress={spin}
-                                disabled={isAnimating}
-                            >
-                                <Text style={styles.buttonText}>GIRAR</Text>
+                            <TouchableOpacity style={styles.betDisplay}>
+                                <Text style={styles.betValue}>$ {currentBet.toFixed(2)}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => changeBet('up')} style={styles.arrowBtn}>
+                                <Text style={styles.arrowText}>{'>'}</Text>
                             </TouchableOpacity>
                         </View>
-                    </>
-                )}
+                    </View>
 
-                {gameState === 'FINISHED' && (
-                    totalWin > 0 ? (
-                        <WinAnimation
-                            multipliers={multipliers}
-                            betAmount={betAmount}
-                            onReset={resetGame}
-                        />
-                    ) : (
-                        <View style={styles.centerContent}>
-                            <Text style={styles.title}>¡Juego Terminado!</Text>
-                            <Text style={styles.resultText}>Suerte para la proxima!</Text>
+                    <TouchableOpacity
+                        style={[styles.spinButton, isSpinning && styles.disabled]}
+                        onPress={handleSpin}
+                        disabled={isSpinning}
+                    >
+                        <Text style={styles.spinText}>{isSpinning ? '...' : 'GIRAR'}</Text>
+                    </TouchableOpacity>
+                </View>
 
-                            <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={resetGame}>
-                                <Text style={styles.buttonText}>INTENTAR DE NUEVO</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )
-                )}
+                {/* Buy Feature Button */}
+                <TouchableOpacity style={styles.buyButton} onPress={handleBuyFeature}>
+                    <Text style={styles.buyLabel}>COMPRAR</Text>
+                    <Text style={styles.buyCost}>BONUS</Text>
+                    <Text style={styles.buyCost}>${(currentBet * 100).toFixed(0)}</Text>
+                </TouchableOpacity>
 
+                {/* Modals moved to root */}
             </SafeAreaView>
+
+            {/* Modals */}
         </ImageBackground>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    safeArea: {
-        flex: 1,
-        width: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    centerContent: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-    },
-    title: {
-        fontSize: 40,
-        fontFamily: 'Minecraft',
-        color: '#FFD700',
-        marginBottom: 20,
-        textTransform: 'uppercase',
-    },
-    subtitle: {
-        fontSize: 18,
-        color: '#525252',
-        fontFamily: 'Minecraft',
-        marginBottom: 10,
-    },
-    input: {
-        backgroundColor: '#E7E6E0',
-        color: '#525252',
-        fontSize: 24,
-        padding: 15,
-        width: '60%',
+    container: { flex: 1, backgroundColor: '#000' },
+
+    backButton: {
+        position: 'absolute',
+        top: 50,
+        left: 20,
+        zIndex: 100,
+        paddingHorizontal: 15,
+        paddingVertical: 5,
+        backgroundColor: 'rgba(0,0,0,0.5)',
         borderRadius: 5,
-        textAlign: 'center',
-        marginBottom: 20,
-        borderWidth: 3,
-        borderColor: '#737373',
-        fontFamily: 'Minecraft',
+        borderWidth: 1,
+        borderColor: '#fff'
     },
+    backArrow: {
+        color: 'white',
+        fontSize: 30,
+        fontFamily: 'Minecraft',
+        fontWeight: 'bold',
+        marginTop: -3
+    },
+
+    safeArea: { flex: 1, alignItems: 'center' },
+
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        width: '90%',
-        marginBottom: 10,
-        marginTop: 30, // SafeArea spacing
-        zIndex: 2000, // Ensure header is ALWAYS on top of flying tools (zIndex 100)
-        elevation: 2000,
-    },
-    infoText: {
-        backgroundColor: '#E7E6E0',
-        borderColor: '#737373',
-        borderWidth: 3,
-        borderRadius: 5,
-        padding: 10,
-        paddingHorizontal: 20,
-        color: '#525252',
-        fontSize: 13,
-        fontFamily: 'Minecraft',
-    },
-
-    moneyText: {
-        color: '#00FF00',
-        fontSize: 30,
-        fontFamily: 'Minecraft',
-    },
-    resultText: {
-        color: 'white',
-        fontSize: 24,
-        marginBottom: 10,
-    },
-    toolsContainer: {
-        position: 'relative',
-        backgroundColor: '#ebebe8ff',
-        borderRadius: 5,
-        borderColor: '#737373',
-        borderWidth: 3,
-        paddingTop: 3,
-        paddingBottom: 3,
         width: '95%',
-        zIndex: 100, // Ensure tools are above grid for animation
-        elevation: 100, // Android support
-        overflow: 'visible',
-    },
-    toolsRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        width: '100%',
-        margin: 1,
-        overflow: 'visible'
-    },
-    slot: {
-        backgroundColor: '#bebebeff',
-        margin: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 0,
-        // Dando profundidad (Efecto Hundido)
-        borderTopWidth: 2,
-        borderTopColor: '#373737', // Sombra Superior
-        borderLeftWidth: 2,
-        borderLeftColor: '#373737', // Sombra Izquierda
-        borderBottomWidth: 2,
-        borderBottomColor: '#ffffff', // Brillo Inferior
-        borderRightWidth: 2,
-        borderRightColor: '#ffffff', // Brillo Derecho
-    },
-    separator: { height: 2, width: '90%', backgroundColor: '#555', marginBottom: 10, marginTop: 10 },
-    gridContainer: {
-        marginBottom: 5,
-        zIndex: 0,
-        elevation: 0,
-    },
-    row: { flexDirection: 'row' },
-
-    multipliersRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
+        marginTop: 130,
         marginBottom: 20,
     },
-    multBox: {
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#373737',
-        borderWidth: 2,
-        borderColor: '#bebebeff',
+    badge: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        padding: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FFD700',
+        minWidth: 100,
+        alignItems: 'center'
     },
-    multText: {
-        color: '#ffae00ff',
-        fontSize: 18,
-        fontFamily: 'Minecraft',
-    },
+    badgeLabel: { color: '#FFD700', fontSize: 10, fontFamily: 'Minecraft' },
+    badgeValue: { color: 'white', fontSize: 16, fontFamily: 'Minecraft' },
 
-    controls: { flexDirection: 'row', gap: 20 },
-    button: {
-        backgroundColor: '#05DF72',
-        paddingVertical: 15,
-        paddingHorizontal: 40,
-        borderRadius: 6,
-        elevation: 5,
-        // Efecto Relieve (Botón 3D)
-        borderTopWidth: 2,
-        borderTopColor: 'rgba(255,255,255,0.5)',
-        borderLeftWidth: 2,
-        borderLeftColor: 'rgba(255,255,255,0.5)',
-        borderBottomWidth: 4,
-        borderBottomColor: 'rgba(0,0,0,0.3)',
-        borderRightWidth: 4,
-        borderRightColor: 'rgba(0,0,0,0.3)',
+    gridContainer: {
+        padding: 5,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#333'
     },
-    buttonStart: {
-        backgroundColor: '#05DF72',
-        width: '70%',
-        alignItems: 'center',
-        paddingVertical: 25,
-        paddingHorizontal: 50,
-        marginVertical: 10,
+    row: { flexDirection: 'row' },
+    cell: {
+        margin: 2,
+        backgroundColor: 'rgba(255,255,255,0.1)',
         borderRadius: 5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden' // Important for drop anim masking
+    },
+
+    controls: {
+        position: 'absolute',
+        bottom: 50,
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '90%',
+        justifyContent: 'space-between'
+    },
+    betControl: { alignItems: 'center' },
+    controlLabel: { color: '#ccc', fontFamily: 'Minecraft', marginBottom: 5 },
+    betSelector: {
+        flexDirection: 'row',
+        backgroundColor: '#222',
+        borderRadius: 5,
+        alignItems: 'center'
+    },
+    arrowBtn: { padding: 10, backgroundColor: '#444', borderRadius: 5 },
+    arrowText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+    betDisplay: { paddingHorizontal: 15, minWidth: 80, alignItems: 'center' },
+    betValue: { color: 'white', fontFamily: 'Minecraft', fontSize: 18 },
+
+    spinButton: {
+        backgroundColor: '#05DF72',
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 5,
+        borderWidth: 3,
+        borderColor: 'white'
+    },
+    disabled: { opacity: 0.7 },
+    spinText: { color: 'white', fontFamily: 'Minecraft', fontSize: 14 },
+
+    buyButton: {
+        position: 'absolute',
+        left: 20,
+        bottom: 150,
+        backgroundColor: '#FFbf00',
+        padding: 10,
+        borderRadius: 8,
         borderWidth: 2,
-        borderColor: '#737373',
-        fontFamily: 'Minecraft',
+        borderColor: 'white',
+        alignItems: 'center',
+        elevation: 5
     },
-    buttonDisabled: { backgroundColor: '#555' },
-    buttonText: { color: '#F8FAFC', fontSize: 19, fontFamily: 'Minecraft' },
+    buyLabel: { color: 'black', fontFamily: 'Minecraft', fontSize: 12 },
+    buyCost: { color: 'black', fontFamily: 'Minecraft', fontSize: 10, fontWeight: 'bold' },
 
-    gameLogo: {
-        width: '80%',    // Ocupa el 80% del ancho de la pantalla
-        height: 300,     // Ajusta esta altura según tu imagen
-        marginBottom: 5,
+    modalOverlay: {
+        width: width,
+        height: height,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center'
     },
+    modalContent: {
+        backgroundColor: '#333', padding: 20, borderRadius: 10, width: '80%', alignItems: 'center', borderWidth: 2, borderColor: '#FFD700'
+    },
+    modalTitle: { color: '#FFD700', fontSize: 20, fontFamily: 'Minecraft', marginBottom: 10 },
+    modalText: { color: 'white', fontSize: 18, marginBottom: 20, fontFamily: 'Minecraft' },
+    modalButtons: { flexDirection: 'row', gap: 20 },
+    modalBtnCancel: { backgroundColor: '#f44336', padding: 10, borderRadius: 5 },
+    modalBtnConfirm: { backgroundColor: '#05DF72', padding: 10, borderRadius: 5 },
+    modalBtnText: { color: 'white', fontFamily: 'Minecraft' },
 
-    infoLink: { marginTop: 20 },
-    infoLinkText: { color: '#525252', fontSize: 18, fontFamily: 'Minecraft' }
-
+    eggOverlay: {
+        width: width,
+        height: height,
+        backgroundColor: 'rgba(0,0,0,0.95)',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    eggTitle: { color: '#FFD700', fontSize: 32, fontFamily: 'Minecraft', marginBottom: 10, textShadowColor: 'black', textShadowRadius: 4 },
+    eggSubtitle: { color: 'white', fontSize: 18, fontFamily: 'Minecraft', marginBottom: 50 },
+    eggsContainer: { flexDirection: 'row', gap: 20 },
+    eggButton: { alignItems: 'center' },
+    eggImage: { width: 100, height: 120 },
+    eggLabel: { color: 'white', fontSize: 24, marginTop: 10, fontFamily: 'Minecraft' }
 });

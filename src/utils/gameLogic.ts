@@ -174,6 +174,17 @@ export const applyToolDamage = (currentGrid: Block[][], col: number, damagePerHi
     return { newGrid, moneyEarned };
 };
 
+export const applySingleHit = (currentGrid: Block[][], rowIndex: number, colIndex: number, damage: number) => {
+    const newGrid = JSON.parse(JSON.stringify(currentGrid));
+    if (newGrid[rowIndex] && newGrid[rowIndex][colIndex]) {
+        const block = newGrid[rowIndex][colIndex];
+        block.currentHealth -= damage;
+        if (block.currentHealth < 0) block.currentHealth = 0;
+        if (block.currentHealth === 0) block.isDestroyed = true;
+    }
+    return newGrid;
+};
+
 export const processTurn = (currentGrid: Block[][], tools: ToolSlot[]): TurnResult => {
     let newGrid = JSON.parse(JSON.stringify(currentGrid));
     let totalMoney = 0;

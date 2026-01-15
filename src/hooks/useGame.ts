@@ -1,7 +1,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { Block, ToolSlot } from '../types/game';
-import { createNewBoard, createNewTools, processTurn, applyTntDamage, applyToolDamage, simulateToolPath, generateMultipliers } from '../utils/gameLogic';
+import { createNewBoard, createNewTools, processTurn, applyTntDamage, applyToolDamage, simulateToolPath, generateMultipliers, applySingleHit } from '../utils/gameLogic';
 import { TOOL_HIT_DURATION, TOOL_ROWS, GRID_COLS, MAX_SPINS, ENTRANCE_DURATION, PRESENTATION_DURATION } from '../constants/gameRules';
 
 export type GameState = 'BETTING' | 'PLAYING' | 'FINISHED';
@@ -20,14 +20,24 @@ export const useGame = () => {
 
     const [isAnimating, setIsAnimating] = useState(false);
 
-    const startGame = useCallback((amount: number) => {
+    const startGame = useCallback((amount: number, spins: number = MAX_SPINS) => {
         const newGrid = createNewBoard();
         const newMultipliers = generateMultipliers();
+
+        // Scale Block Values based on Bet (Base 0.20)
+        const betRatio = amount / 0.20;
+        newGrid.forEach(row => {
+            row.forEach(block => {
+                // Assuming block.value comes from config. If undefined check needed?
+                // Blocks created by createNewBoard HAVE values from CONFIG.
+                block.value = parseFloat((block.value * betRatio).toFixed(2));
+            });
+        });
 
         setGrid(newGrid);
         setMultipliers(newMultipliers);
         setBetAmount(amount);
-        setSpinsRemaining(MAX_SPINS);
+        setSpinsRemaining(spins);
         setTotalWin(0);
         setTools([]);
 
@@ -84,8 +94,9 @@ export const useGame = () => {
                         slot.plannedPath = path;
                         slot.startDelay = columnTimers[col];
 
-                        const uses = slot.tool.uses;
-                        const myDuration = (uses * TOOL_HIT_DURATION);
+                        const hitCount = slot.plannedPath ? slot.plannedPath.length : 0;
+                        // Correct timing: Only wait for actual hits. If miss (0), small buffer.
+                        const myDuration = (hitCount > 0 ? hitCount : 0.5) * TOOL_HIT_DURATION;
 
                         const res = applyToolDamage(simGrid, col, slot.tool.damagePerHit, slot.tool.uses);
                         simGrid = res.newGrid;
@@ -133,28 +144,33 @@ export const useGame = () => {
                     let duration;
                     if (tool.type === 'tnt') {
                         // Si la TNT no rompe nada, solo desvanece rápido (300ms). Si rompe, explosión completa (1200ms).
-                        duration = slot.plannedPath.length > 0 ? 1200 : 300;
+                        duration = (slot.plannedPath?.length || 0) > 0 ? 1200 : 300;
                     } else {
-                        duration = slot.plannedPath.length * TOOL_HIT_DURATION;
+                        duration = (slot.plannedPath?.length || 0) * TOOL_HIT_DURATION;
                     }
                     // Sync logic update with visual animation start (Entrance + Presentation)
                     // Add extra buffer (800ms) to ensure Visuals (controlled by App.tsx breakDelay) happen FIRST.
                     // This prevents strict Reference Checks from killing the block before the animation hits.
                     // Especially important for TNT (Uses=1).
-                    const updateTime = delay + duration + 800 + ENTRANCE_DURATION + PRESENTATION_DURATION;
+                    // Base start time for this tool's action sequence
+                    const baseTime = delay + 800 + ENTRANCE_DURATION + PRESENTATION_DURATION;
 
-                    setTimeout(() => {
-                        setGrid(prevGrid => {
-                            let result;
-                            if (tool.type === 'tnt') {
-                                result = applyTntDamage(prevGrid, colIndex, tool.damagePerHit);
-                            } else {
-                                result = applyToolDamage(prevGrid, colIndex, tool.damagePerHit, tool.uses);
-                            }
-                            // NOTA: Ya no sumamos dinero aquí.
-                            return result.newGrid;
-                        });
-                    }, updateTime);
+                    if (tool.type === 'tnt') {
+                        setTimeout(() => {
+                            setGrid(prevGrid => applyTntDamage(prevGrid, colIndex, tool.damagePerHit).newGrid);
+                        }, baseTime + duration);
+                    } else {
+                        // Granular Updates per Hit (Visual Sync)
+                        if (slot.plannedPath && slot.plannedPath.length > 0) {
+                            slot.plannedPath.forEach((targetRow, hitIdx) => {
+                                // Impact happens at 70% of the swing/bounce
+                                const impactTime = baseTime + (hitIdx * TOOL_HIT_DURATION) + (TOOL_HIT_DURATION * 0.7);
+                                setTimeout(() => {
+                                    setGrid(prevGrid => applySingleHit(prevGrid, targetRow, colIndex, tool.damagePerHit));
+                                }, impactTime);
+                            });
+                        }
+                    }
                 });
             });
 
@@ -172,12 +188,12 @@ export const useGame = () => {
 
     // Efecto para auto-disparo del primer tiro
     useEffect(() => {
-        if (gameState === 'PLAYING' && spinsRemaining === MAX_SPINS && !isAnimating && grid.length > 0) {
+        if (gameState === 'PLAYING' && spinsRemaining > 0 && tools.length === 0 && !isAnimating && grid.length > 0) {
             // Pequeño delay para que se vea la UI antes de arrancar
             const t = setTimeout(() => spin(), 500);
             return () => clearTimeout(t);
         }
-    }, [gameState, spinsRemaining, isAnimating, grid, spin]);
+    }, [gameState, spinsRemaining, isAnimating, grid, spin, tools.length]);
 
     // Efecto para detectar Fin de Juego (Tiros agotados o Grid vacío)
     useEffect(() => {

@@ -2,6 +2,29 @@
 
 import { ToolType, BlockType } from "../types/game";
 
+export const BET_LEVELS = [0.20, 0.40, 0.80, 1.00, 1.20, 1.40, 1.80, 2.00];
+
+// Pays for 8+ symbols at 0.20 bet
+export const PAYTABLE_BASE: Record<string, number> = {
+    item_1: 0.08,
+    item_2: 0.10,
+    item_3: 0.15,
+    item_4: 0.20,
+    item_5: 0.30,
+    item_6: 0.40,
+    item_7: 0.55,
+};
+
+// Base values for Mining Blocks (at 0.20 bet)
+export const BLOCK_VALUES_BASE: Record<BlockType, number> = {
+    dirt: 0.15,
+    stone: 0.25,
+    iron_ore: 0.35,
+    gold_ore: 0.30,
+    diamond_ore: 0.45,
+    obsidian: 1.20,
+};
+
 // Configuración de los Picos
 export const TOOLS_CONFIG: Record<ToolType, { uses: number; damage: number }> = {
     wood: { uses: 2, damage: 1 },

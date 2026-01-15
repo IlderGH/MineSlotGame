@@ -11,6 +11,18 @@ export const BLOCK_IMAGES: Record<BlockType, any> = {
     obsidian: require("../assets/blocks/obsidian.png"),
 };
 
+export const SLOT_IMAGES: Record<string, any> = {
+    item_1: require("../assets/items/huevo.png"),
+    item_2: require("../assets/items/hueso.png"),
+    item_3: require("../assets/items/oro.png"),
+    item_4: require("../assets/items/campana.png"),
+    item_5: require("../assets/items/pollo.png"),
+    item_6: require("../assets/items/esmeralda.png"),
+    item_7: require("../assets/items/diamante.png"),
+    scatter: require("../assets/items/manzana.png"),
+    egg: require("../assets/items/huevo.png"),
+};
+
 export const TOOL_IMAGES: Record<ToolType, any> = {
     wood: require("../assets/tools/pico_madera.png"),
     stone: require("../assets/tools/pico_hierro.png"),

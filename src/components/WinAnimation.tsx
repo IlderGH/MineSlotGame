@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ImageBackground } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -13,11 +13,12 @@ const { width, height } = Dimensions.get('window');
 
 interface WinAnimationProps {
     multipliers: number[];
+    earnedIndices: number[]; // New Prop
     betAmount: number;
     onReset: () => void;
 }
 
-const FlyingMultiplier = ({ value, index, total, onArrival }: { value: number, index: number, total: number, onArrival: (val: number) => void }) => {
+const FlyingMultiplier = ({ value, index, total, delayIndex, onArrival }: { value: number, index: number, total: number, delayIndex: number, onArrival: (val: number) => void }) => {
     // Initial Position (Bottom Grid)
     const BOX_WIDTH = 50;
     const TOTAL_WIDTH = total * BOX_WIDTH;
@@ -31,8 +32,9 @@ const FlyingMultiplier = ({ value, index, total, onArrival }: { value: number, i
     // So: Start Scale 1 (visible), Scale Up (1.5), then Fly.
 
     useEffect(() => {
-        // Sequence delay based on index
-        const delay = 500 + (index * 600); // Staggered
+        // Sequence delay based on Valid (Earned) order, not Grid position
+        // This prevents long pauses if columns are skipped
+        const delay = 500 + (delayIndex * 600);
 
         // 1. Scale Up (Attention)
         scale.value = withDelay(delay, withSpring(1.5));
@@ -69,7 +71,7 @@ const FlyingMultiplier = ({ value, index, total, onArrival }: { value: number, i
     }));
 
     // Start with scale 1 immediately? No, animate in?
-    // User implies they are "despejados" (cleared/found). 
+    // User implies they are "despejados" (cleared/found).
     // We let them appear as existing items.
     useEffect(() => { scale.value = 1; }, []);
 
@@ -80,8 +82,11 @@ const FlyingMultiplier = ({ value, index, total, onArrival }: { value: number, i
     );
 };
 
-export const WinAnimation = ({ multipliers, betAmount, onReset }: WinAnimationProps) => {
-    const totalMultiplier = multipliers.reduce((a, b) => a + b, 0);
+export const WinAnimation = ({ multipliers, earnedIndices, betAmount, onReset }: WinAnimationProps) => {
+    // Only sum earned ones
+    const totalMultiplier = multipliers.reduce((acc, val, idx) => {
+        return earnedIndices.includes(idx) ? acc + val : acc;
+    }, 0);
     const totalWin = totalMultiplier * betAmount;
 
     // Logic State
@@ -103,7 +108,7 @@ export const WinAnimation = ({ multipliers, betAmount, onReset }: WinAnimationPr
     // Check if sequence is done to trigger final phase
     useEffect(() => {
         if (currentSum === totalMultiplier && totalMultiplier > 0) {
-            // All multipliers arrived. 
+            // All multipliers arrived.
             // Trigger Final Equation Phase after brief pause.
             const timeout = setTimeout(() => {
                 showFinalResult();
@@ -142,15 +147,21 @@ export const WinAnimation = ({ multipliers, betAmount, onReset }: WinAnimationPr
             {/* Phase 1: Flying Multipliers */}
             {/* Rendered at bottom, animate up */}
             <View style={styles.bottomContainer}>
-                {multipliers.map((m, i) => (
-                    <FlyingMultiplier
-                        key={i}
-                        value={m}
-                        index={i}
-                        total={multipliers.length}
-                        onArrival={handleArrival}
-                    />
-                ))}
+                {multipliers.map((m, i) => {
+                    const earnedPos = earnedIndices.indexOf(i);
+                    if (earnedPos === -1) return null;
+
+                    return (
+                        <FlyingMultiplier
+                            key={i}
+                            value={m}
+                            index={i}
+                            total={multipliers.length}
+                            delayIndex={earnedPos}
+                            onArrival={handleArrival}
+                        />
+                    );
+                })}
             </View>
 
             {/* Central Display */}
@@ -166,8 +177,8 @@ export const WinAnimation = ({ multipliers, betAmount, onReset }: WinAnimationPr
                 <Animated.View style={[styles.resultBox, resultStyle]}>
                     <View style={styles.divider} />
                     <View style={styles.equationRow}>
-                        <Text style={styles.eqText}>Monto Apostado:</Text>
-                        <Text style={styles.eqText}>$ {betAmount}</Text>
+                        <Text style={styles.eqText}>Apuesta:</Text>
+                        <Text style={styles.eqText2}>$ {betAmount}</Text>
                     </View>
                     <Text style={styles.winLabel}>GANANCIA</Text>
                     <Text style={styles.finalWinText}>${totalWin}</Text>
@@ -207,31 +218,30 @@ const styles = StyleSheet.create({
     },
     flyingBox: {
         position: 'absolute',
-        width: 40,
+        width: 60,
         height: 40,
-        backgroundColor: '#222',
-        borderWidth: 2,
-        borderColor: '#ffb325ff',
-        justifyContent: 'center',
+        margin: 10,
         alignItems: 'center',
-        borderRadius: 8,
-        shadowColor: '#FFA500',
+        justifyContent: 'center',
+        backgroundColor: '#373737',
+        borderWidth: 2,
+        borderColor: '#bebebeff',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 5,
         elevation: 5
     },
     flyingText: {
-        color: '#FFA500',
-        fontWeight: 'bold',
-        fontSize: 14,
+        color: '#ffae00ff',
+        fontSize: 18,
+        fontFamily: 'Minecraft',
     },
     centerContainer: {
         alignItems: 'center',
         width: '80%',
-        backgroundColor: '#ebebe8ff',
-        borderRadius: 15,
-        borderColor: '#737373',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 9,
+        borderColor: '#525252',
         borderWidth: 5,
         paddingTop: 20,
         paddingBottom: 20,
@@ -239,21 +249,26 @@ const styles = StyleSheet.create({
     },
     sumWrapper: {
         alignItems: 'center',
-        marginBottom: 20
+        marginBottom: 20,
+        width: '100%',
     },
     label: {
-        color: '#ccc',
-        fontSize: 16,
+        color: '#525252',
+        fontSize: 18,
         textTransform: 'uppercase',
+        fontFamily: 'Minecraft',
         letterSpacing: 2
     },
     sumText: {
-        color: '#FFA500',
-        fontSize: 60,
+        color: '#34d628ff',
+        fontSize: 50,
+        marginTop: 10,
         fontFamily: 'Minecraft',
-        textShadowColor: 'rgba(255, 165, 0, 0.5)',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 20
+        textShadowColor: '#000000ff',
+        width: '100%',
+        textAlign: 'center',
+        textShadowRadius: 6,
+        textShadowOffset: { width: -2, height: 0 }
     },
     resultBox: {
         width: '90%',
@@ -268,32 +283,48 @@ const styles = StyleSheet.create({
     },
     equationRow: {
         flexDirection: 'column',
-        fontFamily: 'Minecraft',
         alignItems: 'center',
+        width: '100%',
         marginBottom: 10
     },
     eqText: {
-        color: 'white',
-        fontSize: 24,
-        fontWeight: 'bold'
+        color: '#525252',
+        fontFamily: 'Minecraft',
+        fontSize: 17,
+        marginBottom: 5,
+    },
+    eqText2: {
+        color: '#f8c331ff',
+        fontSize: 25,
+        fontFamily: 'Minecraft',
+        textShadowColor: '#000000ff',
+        width: '100%',
+        textAlign: 'center',
+        textShadowRadius: 6,
+        textShadowOffset: { width: -2, height: 0 }
     },
     eqOp: {
-        color: '#888',
-        fontSize: 20,
+        color: '#525252',
+        fontFamily: 'Minecraft',
+        fontSize: 15,
         marginHorizontal: 10
     },
     winLabel: {
-        color: '#FFD700',
-        fontSize: 14,
+        color: '#525252',
+        fontSize: 16,
+        fontFamily: 'Minecraft',
         marginTop: 5,
-        letterSpacing: 4
+        letterSpacing: 2
     },
     finalWinText: {
-        color: '#00FF00',
+        color: '#f8c331ff',
         fontSize: 50,
-        fontWeight: 'bold',
-        textShadowColor: '#00FF00',
-        textShadowRadius: 10
+        fontFamily: 'Minecraft',
+        textShadowColor: '#000000ff',
+        width: '100%',
+        textAlign: 'center',
+        textShadowRadius: 6,
+        textShadowOffset: { width: -2, height: 0 }
     },
     buttonContainer: {
         marginTop: 30,
