@@ -59,9 +59,27 @@ export const createNewTools = (): ToolSlot[][] => {
 
 export const generateMultipliers = (): number[] => {
     const multipliers: number[] = [];
+    // Pesos para los multiplicadores (Indice + 1 = Multiplicador)
+    // 1-5: Comunes (Total ~88%)
+    // 6-10: Raros (Total ~12%)
+    const weights = [30, 25, 15, 10, 8, 5, 3, 2, 1, 1]; // Suma 100
+
+    // Función helper para seleccionar basado en pesos
+    const getWeightedRandom = () => {
+        const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+        let random = Math.random() * totalWeight;
+
+        for (let i = 0; i < weights.length; i++) {
+            if (random < weights[i]) {
+                return i + 1; // Retorna 1-10
+            }
+            random -= weights[i];
+        }
+        return 1; // Fallback
+    };
+
     for (let i = 0; i < GRID_COLS; i++) {
-        // Multiplicador aleatorio entre 1 y 10
-        multipliers.push(Math.floor(Math.random() * 10) + 1);
+        multipliers.push(getWeightedRandom());
     }
     return multipliers;
 };
@@ -125,6 +143,7 @@ export const applyTntDamage = (currentGrid: Block[][], col: number, damage: numb
     const newGrid = JSON.parse(JSON.stringify(currentGrid));
     const hitRow = findTopBlockIndex(newGrid, col);
     let moneyEarned = 0;
+    const destroyedDetails: { r: number, c: number, value: number }[] = [];
 
     if (hitRow !== -1) {
         // TNT afecta a la columna actual y adyacentes
@@ -141,13 +160,14 @@ export const applyTntDamage = (currentGrid: Block[][], col: number, damage: numb
                         block.currentHealth = 0;
                         block.isDestroyed = true;
                         moneyEarned += block.value;
+                        destroyedDetails.push({ r, c, value: block.value });
                     }
                 }
             }
         }
     }
 
-    return { newGrid, moneyEarned };
+    return { newGrid, moneyEarned, destroyedDetails };
 };
 
 export const applyToolDamage = (currentGrid: Block[][], col: number, damagePerHit: number, totalUses: number) => {
@@ -176,13 +196,21 @@ export const applyToolDamage = (currentGrid: Block[][], col: number, damagePerHi
 
 export const applySingleHit = (currentGrid: Block[][], rowIndex: number, colIndex: number, damage: number) => {
     const newGrid = JSON.parse(JSON.stringify(currentGrid));
+    let destroyedValue = 0;
+
     if (newGrid[rowIndex] && newGrid[rowIndex][colIndex]) {
         const block = newGrid[rowIndex][colIndex];
-        block.currentHealth -= damage;
-        if (block.currentHealth < 0) block.currentHealth = 0;
-        if (block.currentHealth === 0) block.isDestroyed = true;
+        // Only apply damage if not already destroyed
+        if (!block.isDestroyed) {
+            block.currentHealth -= damage;
+            if (block.currentHealth < 0) block.currentHealth = 0;
+            if (block.currentHealth === 0) {
+                block.isDestroyed = true;
+                destroyedValue = block.value;
+            }
+        }
     }
-    return newGrid;
+    return { newGrid, destroyedValue };
 };
 
 export const processTurn = (currentGrid: Block[][], tools: ToolSlot[]): TurnResult => {

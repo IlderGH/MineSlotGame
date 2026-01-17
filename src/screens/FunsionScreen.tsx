@@ -1,11 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Dimensions, SafeAreaView, TouchableOpacity, TextInput, Alert, ImageBackground, Image } from 'react-native';
+import { StyleSheet, Text, View, Dimensions, SafeAreaView, TouchableOpacity, TextInput, Alert, ImageBackground, Image, Animated, Easing } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { BlockItem } from '../components/BlockItem';
 import { ToolItem } from '../components/ToolItem';
 import { WinAnimation } from '../components/WinAnimation';
 import { GRID_COLS, TOOL_HIT_DURATION, ENTRANCE_DURATION, PRESENTATION_DURATION } from '../constants/gameRules';
 import { useGame } from '../hooks/useGame';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 
 import * as SplashScreen from 'expo-splash-screen'; // <--- Importar esto
 import { useFonts } from 'expo-font';               // <--- Importar esto
@@ -13,17 +14,109 @@ import { useFonts } from 'expo-font';               // <--- Importar esto
 SplashScreen.preventAutoHideAsync();
 
 const { width } = Dimensions.get('window');
+
+function FloatingText({ amount, col, row, itemSize }: { amount: number, col: number, row: number, itemSize: number }) {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const translateY = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.sequence([
+                Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+                Animated.delay(500),
+                Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+            ]),
+            Animated.timing(translateY, {
+                toValue: -60,
+                duration: 1000,
+                easing: Easing.out(Easing.ease),
+                useNativeDriver: true
+            })
+        ]).start();
+    }, []);
+
+    // Layout calc: padding 5, margin 2 per side (4 total spacing)
+    const left = 5 + col * (itemSize + 4) + (itemSize / 2) - 20;
+    const top = 5 + row * (itemSize + 4) + (itemSize / 2) - 10;
+
+    return (
+        <Animated.View style={{
+            position: 'absolute',
+            left,
+            top,
+            opacity: fadeAnim,
+            transform: [{ translateY }],
+            zIndex: 100
+        }}>
+            <Text style={styles.floatingText}>+${amount.toFixed(2)}</Text>
+        </Animated.View>
+    );
+}
+
 // Para cambiar el tamaño, ajusta el número restado al ancho (actualmente 60).
 // Un número MAYOR (ej. 80) hará los bloques más PEQUEÑOS.
 // Un número MENOR (ej. 30) los hará más GRANDES.
 const ITEM_SIZE = (width - 60) / GRID_COLS;
+
+// Componente para Multiplicadores Animados
+function AnimatedMultiplier({ value, isUnlocked, size }: { value: number, isUnlocked: boolean, size: number }) {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        let animation: Animated.CompositeAnimation | null = null;
+
+        if (value >= 5 && isUnlocked) {
+            animation = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(scaleAnim, { toValue: 1.2, duration: 500, useNativeDriver: true }),
+                    Animated.timing(scaleAnim, { toValue: 1, duration: 500, useNativeDriver: true })
+                ])
+            );
+            animation.start();
+        } else {
+            scaleAnim.setValue(1);
+        }
+
+        return () => {
+            if (animation) animation.stop();
+        };
+    }, [value, isUnlocked]);
+
+    const isHighValue = value >= 5;
+
+    return (
+        <Animated.View style={[
+            styles.multBoxBase,
+            { width: size },
+            !isUnlocked && styles.multBoxLocked,
+            !isUnlocked && isHighValue && styles.multBoxLockedHigh,
+            { transform: [{ scale: scaleAnim }] }
+        ]}>
+            {isUnlocked ? (
+                <Text style={[
+                    styles.multText,
+                    isHighValue && styles.multTextHigh
+                ]}>
+                    x{value}
+                </Text>
+            ) : (
+                <Ionicons
+                    name="help-outline"
+                    size={25}
+                    color={isHighValue ? "#FFA500" : "#fdfde5ff"}
+                    style={isHighValue ? { textShadowColor: '#FF0000', textShadowRadius: 10 } : undefined}
+                />
+            )}
+        </Animated.View>
+    );
+}
 
 export default function FunsionScreen({ navigation, route }: any) {
     const { tiros = 10, apuesta = 0.20 } = route.params || {};
 
     const {
         grid, tools, multipliers,
-        betAmount, spinsRemaining, totalWin,
+        betAmount, spinsRemaining, totalWin, accumulatedWin, recentWins,
         gameState, startGame, resetGame, spin,
         isAnimating
     } = useGame();
@@ -34,9 +127,23 @@ export default function FunsionScreen({ navigation, route }: any) {
     }, [apuesta, tiros]);
 
     // Handle Exit/Finish
+    // Handle Exit/Finish
     const handleExit = () => {
-        resetGame();
-        navigation.goBack(); // Return to Main Slot
+        Alert.alert(
+            "¿Salir?",
+            "Perderás el progreso de la ronda actual.",
+            [
+                { text: "Cancelar", style: "cancel" },
+                {
+                    text: "Salir",
+                    style: "destructive",
+                    onPress: () => {
+                        resetGame();
+                        navigation.navigate('Home');
+                    }
+                }
+            ]
+        );
     };
 
     // Calculate Earned Multipliers (Cleared Columns)
@@ -60,8 +167,14 @@ export default function FunsionScreen({ navigation, route }: any) {
                 {gameState === 'PLAYING' && (
                     <>
                         <View style={styles.header}>
-                            <Text style={styles.infoText}>Apuesta: $ {betAmount.toFixed(2)}</Text>
-                            <Text style={styles.infoText}>Tiros: {spinsRemaining}</Text>
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeLabel}>GANANCIA</Text>
+                                <Text style={styles.badgeValue}>$ {accumulatedWin.toFixed(2)}</Text>
+                            </View>
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeLabel}>TIROS</Text>
+                                <Text style={styles.badgeValue}>{spinsRemaining}</Text>
+                            </View>
                         </View>
 
                         {/* Herramientas */}
@@ -120,21 +233,41 @@ export default function FunsionScreen({ navigation, route }: any) {
                                     ))}
                                 </View>
                             ))}
+                            {/* Floating Texts Layer */}
+                            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                                {recentWins.map((win) => (
+                                    <FloatingText
+                                        key={win.id}
+                                        amount={win.amount}
+                                        col={win.col}
+                                        row={win.row}
+                                        itemSize={ITEM_SIZE}
+                                    />
+                                ))}
+                            </View>
                         </View>
 
                         {/* Multiplicadores */}
+                        {/* Multiplicadores */}
+                        {/* Multiplicadores */}
                         <View style={styles.multipliersRow}>
-                            {multipliers.map((mult, index) => (
-                                <View key={index} style={[styles.multBox, { width: ITEM_SIZE }]}>
-                                    <Text style={styles.multText}>x{mult}</Text>
-                                </View>
-                            ))}
+                            {multipliers.map((mult, colIndex) => {
+                                const isUnlocked = grid.every(row => row[colIndex].isDestroyed);
+                                return (
+                                    <AnimatedMultiplier
+                                        key={colIndex}
+                                        value={mult}
+                                        isUnlocked={isUnlocked}
+                                        size={ITEM_SIZE}
+                                    />
+                                );
+                            })}
                         </View>
 
                         <View style={styles.controls}>
                             <TouchableOpacity
                                 style={[styles.button, { backgroundColor: '#f44336' }, isAnimating && styles.buttonDisabled]}
-                                onPress={() => { resetGame(); navigation.navigate('Home'); }}
+                                onPress={handleExit}
                                 disabled={isAnimating}
                             >
                                 <Text style={styles.buttonText}>SALIR</Text>
@@ -156,15 +289,15 @@ export default function FunsionScreen({ navigation, route }: any) {
                         <WinAnimation
                             multipliers={multipliers}
                             earnedIndices={earnedIndices}
-                            betAmount={betAmount}
-                            onReset={resetGame}
+                            betAmount={accumulatedWin}
+                            onReset={() => { resetGame(); navigation.navigate('Game'); }}
                         />
                     ) : (
                         <View style={styles.centerContent}>
                             <Text style={styles.title}>¡Juego Terminado!</Text>
                             <Text style={styles.resultText}>Suerte para la proxima!</Text>
 
-                            <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={resetGame}>
+                            <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={() => { resetGame(); navigation.navigate('Game'); }}>
                                 <Text style={styles.buttonText}>INTENTAR DE NUEVO</Text>
                             </TouchableOpacity>
                         </View>
@@ -222,12 +355,24 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        width: '90%',
+        width: '95%',
+        alignItems: 'center',
         marginBottom: 10,
         marginTop: 30, // SafeArea spacing
-        zIndex: 2000, // Ensure header is ALWAYS on top of flying tools (zIndex 100)
-        elevation: 2000,
+        zIndex: 100,
+        elevation: 100,
     },
+    badge: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        padding: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FFD700',
+        minWidth: 100,
+        alignItems: 'center'
+    },
+    badgeLabel: { color: '#FFD700', fontSize: 10, fontFamily: 'Minecraft' },
+    badgeValue: { color: 'white', fontSize: 16, fontFamily: 'Minecraft' },
     infoText: {
         backgroundColor: '#E7E6E0',
         borderColor: '#737373',
@@ -252,16 +397,19 @@ const styles = StyleSheet.create({
     },
     toolsContainer: {
         position: 'relative',
-        backgroundColor: '#ebebe8ff',
-        borderRadius: 5,
-        borderColor: '#737373',
-        borderWidth: 3,
-        paddingTop: 3,
-        paddingBottom: 3,
+        padding: 5,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#333',
         width: '95%',
-        zIndex: 100, // Ensure tools are above grid for animation
-        elevation: 100, // Android support
+        zIndex: 100,
+        elevation: 100,
         overflow: 'visible',
+        // Fix for "compressed" look: Ensure it has height even if empty
+        // TOOL_ROWS is 2. We add padding (5*2) + margins (approx)
+        minHeight: (ITEM_SIZE * 2) + 20,
+        justifyContent: 'flex-end', // Align tools to bottom if partial
     },
     toolsRow: {
         flexDirection: 'row',
@@ -271,26 +419,27 @@ const styles = StyleSheet.create({
         overflow: 'visible'
     },
     slot: {
-        backgroundColor: '#bebebeff',
+        backgroundColor: 'rgba(255,255,255,0.1)',
         margin: 1,
+        borderRadius: 5,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 0,
-        // Dando profundidad (Efecto Hundido)
-        borderTopWidth: 2,
-        borderTopColor: '#373737', // Sombra Superior
-        borderLeftWidth: 2,
-        borderLeftColor: '#373737', // Sombra Izquierda
-        borderBottomWidth: 2,
-        borderBottomColor: '#ffffff', // Brillo Inferior
-        borderRightWidth: 2,
-        borderRightColor: '#ffffff', // Brillo Derecho
+        overflow: 'visible'
     },
     separator: { height: 2, width: '90%', backgroundColor: '#555', marginBottom: 10, marginTop: 10 },
     gridContainer: {
         marginBottom: 5,
         zIndex: 0,
         elevation: 0,
+    },
+    floatingText: {
+        color: '#00FF00', // Bright green
+        fontSize: 20,
+        fontFamily: 'Minecraft',
+        textShadowColor: 'black',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 2,
     },
     row: { flexDirection: 'row' },
 
@@ -299,22 +448,43 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 20,
     },
-    multBox: {
+    multBoxBase: {
         height: 40,
-        width: 100,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#373737',
-        borderWidth: 2,
-        borderColor: '#bebebeff',
+    },
+    multBoxLocked: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderWidth: 1,
+        borderRadius: 5,
+        padding: 1,
+        borderColor: '#000000ff',
+    },
+    multBoxLockedHigh: {
+        borderColor: '#FF0000', // Red border hint
+        backgroundColor: 'rgba(50, 0, 0, 0.6)', // Slight red tint
     },
     multText: {
-        color: '#ffae00ff',
-        fontSize: 18,
+        color: '#11ff00ff',
+        fontSize: 20,
         fontFamily: 'Minecraft',
+        textShadowColor: 'black',
+        textShadowOffset: { width: 2, height: 2 },
+        textShadowRadius: 3,
+    },
+    multTextHigh: {
+        color: '#FFA500', // Naranja
+        textShadowColor: '#FF0000', // Rojo Brillo
+        textShadowRadius: 10,
+        textShadowOffset: { width: 0, height: 0 }, // Centrado para efecto glow
     },
 
-    controls: { flexDirection: 'row', gap: 20 },
+    controls: {
+        flexDirection: 'row',
+        gap: 20,
+        zIndex: 500,
+        elevation: 500
+    },
     button: {
         backgroundColor: '#05DF72',
         paddingVertical: 15,

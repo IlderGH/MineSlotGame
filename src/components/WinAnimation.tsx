@@ -177,11 +177,11 @@ export const WinAnimation = ({ multipliers, earnedIndices, betAmount, onReset }:
                 <Animated.View style={[styles.resultBox, resultStyle]}>
                     <View style={styles.divider} />
                     <View style={styles.equationRow}>
-                        <Text style={styles.eqText}>Apuesta:</Text>
-                        <Text style={styles.eqText2}>$ {betAmount}</Text>
+                        <Text style={styles.eqText}>Ganancia:</Text>
+                        <Text style={styles.eqText2}>$ {betAmount.toFixed(2)}</Text>
                     </View>
-                    <Text style={styles.winLabel}>GANANCIA</Text>
-                    <Text style={styles.finalWinText}>${totalWin}</Text>
+                    <Text style={styles.winLabel}>TOTAL</Text>
+                    <Text style={styles.finalWinText}>${totalWin.toFixed(2)}</Text>
                 </Animated.View>
 
                 {/* Play Again Button */}
@@ -223,18 +223,18 @@ const styles = StyleSheet.create({
         margin: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#373737',
-        borderWidth: 2,
-        borderColor: '#bebebeff',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 5,
         elevation: 5
     },
     flyingText: {
-        color: '#ffae00ff',
-        fontSize: 18,
+        color: '#11ff00ff',
+        fontSize: 20,
         fontFamily: 'Minecraft',
+        textShadowColor: 'black',
+        textShadowOffset: { width: 2, height: 2 },
+        textShadowRadius: 3,
     },
     centerContainer: {
         alignItems: 'center',
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
         letterSpacing: 2
     },
     sumText: {
-        color: '#34d628ff',
+        color: '#11ff00ff',
         fontSize: 50,
         marginTop: 10,
         fontFamily: 'Minecraft',
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     },
     finalWinText: {
         color: '#f8c331ff',
-        fontSize: 50,
+        fontSize: 35,
         fontFamily: 'Minecraft',
         textShadowColor: '#000000ff',
         width: '100%',

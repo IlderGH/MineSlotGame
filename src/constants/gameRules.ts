@@ -6,13 +6,15 @@ export const BET_LEVELS = [0.20, 0.40, 0.80, 1.00, 1.20, 1.40, 1.80, 2.00];
 
 // Pays for 8+ symbols at 0.20 bet
 export const PAYTABLE_BASE: Record<string, number> = {
-    item_1: 0.08,
+    item_1: 0.08, // Paga poco
     item_2: 0.10,
-    item_3: 0.15,
-    item_4: 0.20,
-    item_5: 0.30,
-    item_6: 0.40,
-    item_7: 0.55,
+    item_3: 0.12, // Ajusté un poco para hacer espacio
+    item_4: 0.15,
+    item_5: 0.20,
+    item_6: 0.30,
+    item_7: 0.45,
+    item_8: 0.60, // Nuevo
+    item_9: 1.00, // Nuevo (Premium)
 };
 
 // Base values for Mining Blocks (at 0.20 bet)
@@ -37,21 +39,22 @@ export const TOOLS_CONFIG: Record<ToolType, { uses: number; damage: number }> = 
 
 // Configuración de los Bloques
 export const BLOCKS_CONFIG: Record<BlockType, { health: number; value: number }> = {
-    dirt: { health: 1, value: 5 },
-    stone: { health: 3, value: 10 },
-    iron_ore: { health: 5, value: 25 },
-    gold_ore: { health: 8, value: 50 },
-    diamond_ore: { health: 12, value: 100 },
-    obsidian: { health: 24, value: 200 },
+    dirt: { health: 1, value: 0.05 },
+    stone: { health: 3, value: 0.10 },
+    iron_ore: { health: 5, value: 0.25 },
+    gold_ore: { health: 8, value: 0.50 },
+    diamond_ore: { health: 12, value: 1.00 },
+    obsidian: { health: 24, value: 2.00 },
 };
 
 export const GRID_ROWS = 5;
 export const GRID_COLS = 5;
 
 // Duración de la animación de UN golpe (ms)
+// Duración de la animación de UN golpe (ms)
 export const TOOL_HIT_DURATION = 900;
 export const ENTRANCE_DURATION = 700;
 export const PRESENTATION_DURATION = 800;
 
 export const TOOL_ROWS = 2;
-export const MAX_SPINS = 5;
+export const MAX_SPINS = 50;

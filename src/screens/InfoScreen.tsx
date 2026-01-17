@@ -1,90 +1,246 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ImageBackground, SafeAreaView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import { SLOT_IMAGES, IMAGES_EXTRAS } from '../constants/assets';
 
 export const InfoScreen = ({ navigation }: any) => {
-    const [info, setInfo] = useState('');
-
-    const handleSave = () => {
-        Alert.alert("Guardado", "La información ha sido registrada: " + info);
-        // Aquí podrías guardar en AsyncStorage o enviar a una base de datos
-        navigation.goBack(); // Regresa a la pantalla anterior
-    };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Agregar Información</Text>
+        <ImageBackground source={require('../assets/fondo1.png')} style={styles.container}>
+            <SafeAreaView style={styles.safeArea}>
+                <StatusBar style="light" />
 
-            <Text style={styles.label}>Escribe tus datos:</Text>
-            <TextInput
-                style={styles.input}
-                placeholder="Ej: Nombre del jugador..."
-                placeholderTextColor="#666"
-                value={info}
-                onChangeText={setInfo}
-            />
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                        <Ionicons name="arrow-back" size={24} color="white" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>INFORMACION</Text>
+                    <View style={{ width: 40 }} />
+                </View>
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Text style={styles.buttonText}>GUARDAR</Text>
-            </TouchableOpacity>
+                <ScrollView contentContainerStyle={styles.scrollContent}>
 
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                <Text style={styles.backText}>Cancelar</Text>
-            </TouchableOpacity>
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>SOBRE EL JUEGO</Text>
+                        <Text style={styles.text}>
+                            ¡Bienvenido a MineSlot! Sumergete en una aventura de bloques y premios.
+                            Gira la grilla para encontrar tesoros ocultos, acumula minerales valiosos
+                            y usa herramientas para excavar grandes ganancias.
+                        </Text>
+                    </View>
 
-            <StatusBar style="light" />
-        </View>
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>¿COMO GANAR?</Text>
+                        <View style={styles.mechanicRow}>
+                            <View style={styles.mechanicIconContainer}>
+                                <View style={styles.miniGrid}>
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.miniIcon} />
+                                </View>
+                            </View>
+                            <View style={styles.mechanicTextContainer}>
+                                <Text style={styles.text}>
+                                    No necesitas lineas de pago.
+                                </Text>
+                                <Text style={[styles.text, styles.highlight]}>
+                                    Consigue 8 o mas simbolos iguales
+                                </Text>
+                                <Text style={styles.text}>
+                                    en cualquier lugar de la pantalla para ganar.
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>SIMBOLOS Y VALOR</Text>
+                        <Text style={[styles.text, { textAlign: 'center', marginBottom: 15, fontSize: 12 }]}>
+                            (De menor a mayor valor)
+                        </Text>
+
+                        <View style={styles.paytableGrid}>
+                            <View style={styles.paytableColumn}>
+                                <Text style={styles.paytableHeader}>COMUNES</Text>
+                                <View style={styles.itemRow}>
+                                    <Image source={SLOT_IMAGES.item_1} style={styles.payIcon} resizeMode="contain" />
+                                    <Image source={SLOT_IMAGES.item_2} style={styles.payIcon} resizeMode="contain" />
+                                    <Image source={SLOT_IMAGES.item_3} style={styles.payIcon} resizeMode="contain" />
+                                </View>
+                            </View>
+
+                            <View style={styles.paytableColumn}>
+                                <Text style={styles.paytableHeader}>VALIOSOS</Text>
+                                <View style={styles.itemRow}>
+                                    <Image source={SLOT_IMAGES.item_4} style={styles.payIcon} resizeMode="contain" />
+                                    <Image source={SLOT_IMAGES.item_5} style={styles.payIcon} resizeMode="contain" />
+                                    <Image source={SLOT_IMAGES.item_6} style={styles.payIcon} resizeMode="contain" />
+                                </View>
+                            </View>
+
+                            <View style={styles.paytableColumn}>
+                                <Text style={[styles.paytableHeader, { color: '#FF4444' }]}>MUY VALIOSOS</Text>
+                                <View style={styles.itemRow}>
+                                    <Image source={SLOT_IMAGES.item_7} style={styles.payIcon} resizeMode="contain" />
+                                    <Image source={SLOT_IMAGES.item_8} style={styles.payIcon} resizeMode="contain" />
+                                    <Image source={SLOT_IMAGES.item_9} style={styles.payIcon} resizeMode="contain" />
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={[styles.card, { borderColor: '#05DF72' }]}>
+                        <Text style={[styles.cardTitle, { color: '#05DF72' }]}>RONDA DE BONUS</Text>
+
+                        <View style={styles.scatterContainer}>
+                            <Image source={IMAGES_EXTRAS.scatters} style={styles.scatterIcon} resizeMode="contain" />
+                        </View>
+
+                        <Text style={[styles.text, { textAlign: 'center', marginTop: 10 }]}>
+                            Consigue <Text style={styles.highlight}>3 o mas TOTEMS</Text> en un solo giro para activar la funcion de Mineria.
+                        </Text>
+                        <Text style={[styles.text, { textAlign: 'center', fontSize: 12, opacity: 0.8 }]}>
+                            ¡Elige tu suerte y gana Tiros Gratis!
+                        </Text>
+                    </View>
+
+                    <View style={{ height: 40 }} />
+
+                </ScrollView>
+            </SafeAreaView>
+        </ImageBackground>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#121212',
-        padding: 20,
-        justifyContent: 'center',
+        backgroundColor: '#000',
     },
-    title: {
-        fontSize: 32,
-        color: '#FFD700',
-        fontWeight: 'bold',
-        marginBottom: 40,
-        textAlign: 'center',
-        fontFamily: 'Minecraft', // Usamos tu fuente personalizada
+    safeArea: {
+        flex: 1,
     },
-    label: {
-        color: 'white',
-        fontSize: 18,
-        marginBottom: 10,
-    },
-    input: {
-        backgroundColor: '#222',
-        color: 'white',
-        padding: 15,
-        borderRadius: 10,
-        fontSize: 18,
-        borderWidth: 1,
-        borderColor: '#444',
-        marginBottom: 30,
-    },
-    saveButton: {
-        backgroundColor: '#4CAF50',
-        padding: 15,
-        borderRadius: 10,
+    header: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 15,
-    },
-    buttonText: {
-        color: 'white',
-        fontSize: 20,
-        fontWeight: 'bold',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        marginTop: 40,
+        marginBottom: 20,
     },
     backButton: {
-        padding: 15,
+        padding: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#555',
+    },
+    backArrow: {
+        color: 'white',
+        fontSize: 24,
+        fontFamily: 'Minecraft',
+        marginTop: -4,
+    },
+    headerTitle: {
+        color: '#FFD700',
+        fontSize: 24,
+        fontFamily: 'Minecraft',
+        textShadowColor: 'black',
+        textShadowRadius: 4,
+    },
+    scrollContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 40,
+    },
+    card: {
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 20,
+        borderWidth: 2,
+        borderColor: '#444',
+    },
+    cardTitle: {
+        color: '#FFD700',
+        fontSize: 18,
+        fontFamily: 'Minecraft',
+        marginBottom: 15,
+        textAlign: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: '#333',
+        paddingBottom: 10,
+    },
+    text: {
+        color: '#EEE',
+        fontFamily: 'Minecraft',
+        fontSize: 14,
+        lineHeight: 22,
+    },
+    highlight: {
+        color: '#05DF72',
+        fontWeight: 'bold',
+    },
+    mechanicRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 15,
+    },
+    mechanicIconContainer: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 8,
+        padding: 5,
+    },
+    miniGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        width: 60,
+        gap: 2,
+        justifyContent: 'center',
+    },
+    miniIcon: {
+        width: 25,
+        height: 25,
+    },
+    mechanicTextContainer: {
+        flex: 1,
+    },
+    paytableGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    paytableColumn: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    paytableHeader: {
+        color: '#AAA',
+        fontFamily: 'Minecraft',
+        fontSize: 10,
+        marginBottom: 10,
+    },
+    itemRow: {
+        gap: 10,
         alignItems: 'center',
     },
-    backText: {
-        color: '#f44336',
-        fontSize: 16,
-    }
+    payIcon: {
+        width: 45,
+        height: 45,
+        marginVertical: 5,
+    },
+    scatterContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 15,
+        marginBottom: 10,
+    },
+    scatterIcon: {
+        width: 160,
+        height: 120,
+    },
 });

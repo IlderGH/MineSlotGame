@@ -86,6 +86,9 @@ const styles = StyleSheet.create({
     linkText: {
         color: '#525252',
         fontSize: 18,
-        fontFamily: 'Minecraft'
+        fontFamily: 'Minecraft',
+        textShadowColor: 'rgba(0,0,0,0.3)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 1
     }
 });

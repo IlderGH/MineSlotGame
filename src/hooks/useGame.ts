@@ -17,8 +17,21 @@ export const useGame = () => {
     const [betAmount, setBetAmount] = useState(0);
     const [spinsRemaining, setSpinsRemaining] = useState(0);
     const [totalWin, setTotalWin] = useState(0);
+    const [accumulatedWin, setAccumulatedWin] = useState(0);
+    const [recentWins, setRecentWins] = useState<{ id: string, amount: number, col: number, row: number }[]>([]);
 
     const [isAnimating, setIsAnimating] = useState(false);
+
+    // Failsafe: Reset animation state if stuck
+    useEffect(() => {
+        if (isAnimating) {
+            const t = setTimeout(() => {
+                console.warn("Animation stuck? Forcing reset.");
+                setIsAnimating(false);
+            }, 20000); // 20s limit
+            return () => clearTimeout(t);
+        }
+    }, [isAnimating]);
 
     const startGame = useCallback((amount: number, spins: number = MAX_SPINS) => {
         const newGrid = createNewBoard();
@@ -39,6 +52,7 @@ export const useGame = () => {
         setBetAmount(amount);
         setSpinsRemaining(spins);
         setTotalWin(0);
+        setAccumulatedWin(0);
         setTools([]);
 
         setGameState('PLAYING');
@@ -157,7 +171,20 @@ export const useGame = () => {
 
                     if (tool.type === 'tnt') {
                         setTimeout(() => {
-                            setGrid(prevGrid => applyTntDamage(prevGrid, colIndex, tool.damagePerHit).newGrid);
+                            setGrid(prevGrid => {
+                                const { newGrid, moneyEarned, destroyedDetails } = applyTntDamage(prevGrid, colIndex, tool.damagePerHit);
+                                if (moneyEarned > 0) {
+                                    setAccumulatedWin(prev => parseFloat((prev + moneyEarned).toFixed(2)));
+                                    const newWins = destroyedDetails.map(d => ({
+                                        id: Math.random().toString(36).substr(2, 9),
+                                        amount: d.value,
+                                        col: d.c,
+                                        row: d.r
+                                    }));
+                                    setRecentWins(prev => [...prev, ...newWins]);
+                                }
+                                return newGrid;
+                            });
                         }, baseTime + duration);
                     } else {
                         // Granular Updates per Hit (Visual Sync)
@@ -166,7 +193,19 @@ export const useGame = () => {
                                 // Impact happens at 70% of the swing/bounce
                                 const impactTime = baseTime + (hitIdx * TOOL_HIT_DURATION) + (TOOL_HIT_DURATION * 0.7);
                                 setTimeout(() => {
-                                    setGrid(prevGrid => applySingleHit(prevGrid, targetRow, colIndex, tool.damagePerHit));
+                                    setGrid(prevGrid => {
+                                        const { newGrid, destroyedValue } = applySingleHit(prevGrid, targetRow, colIndex, tool.damagePerHit);
+                                        if (destroyedValue > 0) {
+                                            setAccumulatedWin(prev => parseFloat((prev + destroyedValue).toFixed(2)));
+                                            setRecentWins(prev => [...prev, {
+                                                id: Math.random().toString(36).substr(2, 9),
+                                                amount: destroyedValue,
+                                                col: colIndex,
+                                                row: targetRow
+                                            }]);
+                                        }
+                                        return newGrid;
+                                    });
                                 }, impactTime);
                             });
                         }
@@ -175,9 +214,11 @@ export const useGame = () => {
             });
 
             // FIN DEL TIRO
+            const finalDelay = Math.max(1000, maxTotalDuration + 500 + ENTRANCE_DURATION + PRESENTATION_DURATION);
+
             setTimeout(() => {
                 setIsAnimating(false);
-            }, Math.max(1000, maxTotalDuration + 500 + ENTRANCE_DURATION + PRESENTATION_DURATION));
+            }, finalDelay);
 
         } catch (error) {
             console.error("Error in spin logic:", error);
@@ -219,8 +260,8 @@ export const useGame = () => {
                     }
                 }
 
-                const win = betAmount * multiplierSum;
-                setTotalWin(win);
+                const win = accumulatedWin * (multiplierSum > 0 ? multiplierSum : 1);
+                setTotalWin(parseFloat(win.toFixed(2)));
                 setGameState('FINISHED');
             }
         }
@@ -234,6 +275,8 @@ export const useGame = () => {
         setBetAmount(0);
         setSpinsRemaining(0);
         setTotalWin(0);
+        setAccumulatedWin(0);
+        setRecentWins([]);
         setIsAnimating(false);
     }, []);
 
@@ -251,5 +294,7 @@ export const useGame = () => {
         // Espera, el usuario dijo "el juego empezara cargando el primer tiro".
         // ¿Los siguientes 14 son manuales? Asumo que sí, es una "Slot".
         isAnimating,
+        accumulatedWin,
+        recentWins,
     };
 };

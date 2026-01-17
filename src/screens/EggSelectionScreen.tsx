@@ -9,7 +9,7 @@ export default function EggSelectionScreen({ navigation, route }: any) {
     const { apuesta } = route.params;
 
     const handleEggPick = () => {
-        const outcomes = [10, 13, 15];
+        const outcomes = [7, 10, 13];
         const result = outcomes[Math.floor(Math.random() * outcomes.length)];
 
         Alert.alert("¡PREMIO!", `¡Has conseguido ${result} Tiros Gratis!`, [

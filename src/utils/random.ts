@@ -11,11 +11,11 @@ const BLOCK_CHANCES: Record<BlockType, number> = {
 };
 
 const TOOL_CHANCES: Record<ToolType, number> = {
-    wood: 0.05, //0.2,
-    stone: 0.1, //0.25,
+    wood: 0.02, //0.2,
+    stone: 0.25, //0.25,
     gold: 0.1, //0.1,
-    diamond: 0.2,//0.05,
-    tnt: 0.5,//0.1,
+    diamond: 0.05,//0.05,
+    tnt: 0.1,//0.1,
     eye: 0.05,//0.3 // Ocupa espacio para reducir herramientas útiles
 
 
