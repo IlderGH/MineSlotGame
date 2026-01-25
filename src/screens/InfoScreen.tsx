@@ -24,9 +24,15 @@ export const InfoScreen = ({ navigation }: any) => {
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>SOBRE EL JUEGO</Text>
                         <Text style={styles.text}>
-                            ¡Bienvenido a MineSlot! Sumergete en una aventura de bloques y premios.
-                            Gira la grilla para encontrar tesoros ocultos, acumula minerales valiosos
-                            y usa herramientas para excavar grandes ganancias.
+                            Este es un proyecto recreativo desarrollado con fines de entretenimiento, inspirado en el videojuego Minecraft.
+                            {"\n\n"}
+                            Este simulador combina la mecánica clásica de las tragamonedas (Slots) con objetos del juego.
+                            El objetivo principal es desbloquear la "Ronda de Bono", una función especial donde el objetivo es conseguir herramientas que te ayuden a despejar una "pared" de diversos bloques.
+                            Puedes acceder a ella consiguiendo los símbolos SCATTER durante tus giros o comprando el acceso directo para jugar al instante.
+                        </Text>
+                        <Text style={styles.highlight}>
+                            Nota: Aun esta en desarrollo, pero tengo pensado subirlo a la pagina oficial de la herramienta que estoy utilizando para su desarrollo
+                            y permitir que cualquiera pueda hacer uso de esta app.
                         </Text>
                     </View>
 
@@ -179,12 +185,15 @@ const styles = StyleSheet.create({
     text: {
         color: '#EEE',
         fontFamily: 'Minecraft',
+        textAlign: 'center',
         fontSize: 14,
         lineHeight: 22,
     },
     highlight: {
         color: '#05DF72',
-        fontWeight: 'bold',
+        fontFamily: 'Minecraft',
+        textAlign: 'center',
+        fontSize: 16,
     },
     mechanicRow: {
         flexDirection: 'row',
