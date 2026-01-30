@@ -11,7 +11,7 @@ export const PAYTABLE_BASE: Record<string, number> = {
     item_3: 0.12, // Ajusté un poco para hacer espacio
     item_4: 0.15,
     item_5: 0.20,
-    item_6: 0.30,
+    // item_6: 0.30, // ELIMINADO
     item_7: 0.45,
     item_8: 0.60, // Nuevo
     item_9: 1.00, // Nuevo (Premium)

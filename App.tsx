@@ -11,6 +11,7 @@ import GameScreen from './src/screens/GameScreen';
 import EggSelectionScreen from './src/screens/EggSelectionScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import { InfoScreen } from './src/screens/InfoScreen';
+import { SoundProvider } from './src/context/SoundContext';
 
 // Prevenimos que el splash screen se oculte automáticamente
 SplashScreen.preventAutoHideAsync();
@@ -34,20 +35,22 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer onReady={onLayoutRootView}>
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={{
-          headerShown: false, // Ocultamos la barra superior por defecto
-          cardStyle: { backgroundColor: '#121212' }
-        }}
-      >
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Game" component={GameScreen} />
-        <Stack.Screen name="EggSelection" component={EggSelectionScreen} />
-        <Stack.Screen name="Funsion" component={FunsionScreen} />
-        <Stack.Screen name="Info" component={InfoScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SoundProvider>
+      <NavigationContainer onReady={onLayoutRootView}>
+        <Stack.Navigator
+          initialRouteName="Home"
+          screenOptions={{
+            headerShown: false, // Ocultamos la barra superior por defecto
+            cardStyle: { backgroundColor: '#121212' }
+          }}
+        >
+          <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="Game" component={GameScreen} />
+          <Stack.Screen name="EggSelection" component={EggSelectionScreen} />
+          <Stack.Screen name="Funsion" component={FunsionScreen} />
+          <Stack.Screen name="Info" component={InfoScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SoundProvider>
   );
 }

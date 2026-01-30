@@ -11,6 +11,15 @@ export const BLOCK_IMAGES: Record<BlockType, any> = {
     obsidian: require("../assets/blocks/obsidian.png"),
 };
 
+export const BLOCK_IMAGES_3D: Record<BlockType, any> = {
+    dirt: require("../assets/blocks/3d_dirt.png"),
+    stone: require("../assets/blocks/3d_stone.png"),
+    iron_ore: require("../assets/blocks/3d_iron.png"),
+    gold_ore: require("../assets/blocks/3d_oro.png"),
+    diamond_ore: require("../assets/blocks/3d_diamond.png"),
+    obsidian: require("../assets/blocks/3d_obsidian.png"),
+};
+
 export const IMAGES_EXTRAS = {
     scatters: require("../assets/scatters.png"),
 
@@ -42,4 +51,12 @@ export const TOOL_IMAGES: Record<ToolType, any> = {
 export const CRACK_IMAGES = {
     state1: require("../assets/Quiebre_estado_1.png"), // Grieta leve
     state2: require("../assets/Quiebre_estado_2.png"), // Grieta severa
+};
+
+export const SOUNDS = {
+    background: require("../assets/sounds/ambiente_4.mp3"),
+    egg_crack: require("../assets/sounds/egg_cracking.mp3"),
+    win_items: require("../assets/sounds/win_items.mp3"),
+    game_start: require("../assets/sounds/game_star.mp3"),
+    win_bonus: require("../assets/sounds/win_bonus.mp3"),
 };

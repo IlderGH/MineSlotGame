@@ -1,13 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ImageBackground, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import Slider from '@react-native-community/slider';
+import VolumeControl from '../components/VolumeControl';
+import { useSound } from '../context/SoundContext';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ navigation }: any) {
+    const { playSound } = useSound();
+
     return (
         <ImageBackground source={require('../assets/fondo1.png')} style={styles.container}>
             <StatusBar style="light" />
+
+            {/* VOLUMEN TOP RIGHT */}
+            {/* Volume Control */}
+            <VolumeControl />
 
             <View style={styles.content}>
                 <Image
@@ -20,7 +30,10 @@ export default function HomeScreen({ navigation }: any) {
 
                 <TouchableOpacity
                     style={styles.playButton}
-                    onPress={() => navigation.navigate('Game')}
+                    onPress={() => {
+                        playSound('game_start');
+                        navigation.navigate('Game');
+                    }}
                 >
                     <Text style={styles.playText}>JUGAR</Text>
                 </TouchableOpacity>
@@ -31,6 +44,7 @@ export default function HomeScreen({ navigation }: any) {
                 >
                     <Text style={styles.linkText}>+README</Text>
                 </TouchableOpacity>
+
             </View>
         </ImageBackground>
     );
@@ -87,8 +101,38 @@ const styles = StyleSheet.create({
         color: '#525252',
         fontSize: 18,
         fontFamily: 'Minecraft',
-        textShadowColor: 'rgba(0,0,0,0.3)',
         textShadowOffset: { width: 1, height: 1 },
         textShadowRadius: 1
+    },
+    soundBtn: {
+        marginTop: 30,
+        padding: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 20
+    },
+    topRightContainer: {
+        position: 'absolute',
+        top: 50,
+        right: 20,
+        zIndex: 10,
+        alignItems: 'flex-end',
+    },
+    iconButton: {
+        padding: 8,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 20,
+    },
+    volumePanel: {
+        marginTop: 10,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        borderRadius: 10,
+        padding: 5,
+        borderWidth: 1,
+        borderColor: '#555',
+    },
+    sliderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 5
     }
 });

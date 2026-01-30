@@ -24,15 +24,14 @@ export const InfoScreen = ({ navigation }: any) => {
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>SOBRE EL JUEGO</Text>
                         <Text style={styles.text}>
-                            Este es un proyecto recreativo desarrollado con fines de entretenimiento, inspirado en el videojuego Minecraft.
+                            Este es un proyecto recreativo desarrollado por un ludopata para ludopatas, inspirado en el videojuego Minecraft.
                             {"\n\n"}
                             Este simulador combina la mecánica clásica de las tragamonedas (Slots) con objetos del juego.
                             El objetivo principal es desbloquear la "Ronda de Bono", una función especial donde el objetivo es conseguir herramientas que te ayuden a despejar una "pared" de diversos bloques.
                             Puedes acceder a ella consiguiendo los símbolos SCATTER durante tus giros o comprando el acceso directo para jugar al instante.
                         </Text>
                         <Text style={styles.highlight}>
-                            Nota: Aun esta en desarrollo, pero tengo pensado subirlo a la pagina oficial de la herramienta que estoy utilizando para su desarrollo
-                            y permitir que cualquiera pueda hacer uso de esta app.
+                            Desarrollado por <Text style={{ color: 'rgba(255, 44, 44, 0.7)', fontStyle: 'italic', fontFamily: 'monospace', fontWeight: 'bold' }}>byRedli</Text>
                         </Text>
                     </View>
 
@@ -108,11 +107,124 @@ export const InfoScreen = ({ navigation }: any) => {
                             <Image source={IMAGES_EXTRAS.scatters} style={styles.scatterIcon} resizeMode="contain" />
                         </View>
 
-                        <Text style={[styles.text, { textAlign: 'center', marginTop: 10 }]}>
-                            Consigue <Text style={styles.highlight}>3 o mas TOTEMS</Text> en un solo giro para activar la funcion de Mineria.
+                        <Text style={[styles.text, { textAlign: 'center', marginTop: 10, marginBottom: 20 }]}>
+                            Consigue <Text style={styles.highlight}>3 o mas TOTEMS</Text> para entrar a la Mina.
                         </Text>
-                        <Text style={[styles.text, { textAlign: 'center', fontSize: 12, opacity: 0.8 }]}>
-                            ¡Elige tu suerte y gana Tiros Gratis!
+
+                        {/* SECCION DE BLOQUES */}
+                        <Text style={[styles.cardTitle, { fontSize: 16, color: '#AAA', borderBottomWidth: 0, marginBottom: 5 }]}>VALOR DE LOS BLOQUES</Text>
+                        <Text style={[styles.text, { fontSize: 12, marginBottom: 10 }]}>Rompe bloques para ganar dinero directo:</Text>
+                        <Text style={[styles.text, { fontSize: 11, marginBottom: 10, color: '#05DF72' }]}>
+                            (Los valores aumentan según tu apuesta base)
+                        </Text>
+
+                        <View style={styles.blocksGrid}>
+                            <View style={styles.blockRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <Image source={require('../assets/blocks/3d_dirt.png')} style={styles.miniBlock3D} />
+                                    <Text style={styles.blockName}>Tierra</Text>
+                                </View>
+                                <Text style={styles.blockValue}>$0.05</Text>
+                            </View>
+                            <View style={styles.blockRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <Image source={require('../assets/blocks/3d_stone.png')} style={styles.miniBlock3D} />
+                                    <Text style={styles.blockName}>Piedra</Text>
+                                </View>
+                                <Text style={styles.blockValue}>$0.10</Text>
+                            </View>
+                            <View style={styles.blockRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <Image source={require('../assets/blocks/3d_iron.png')} style={styles.miniBlock3D} />
+                                    <Text style={styles.blockName}>Hierro</Text>
+                                </View>
+                                <Text style={styles.blockValue}>$0.25</Text>
+                            </View>
+                            <View style={styles.blockRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <Image source={require('../assets/blocks/3d_oro.png')} style={styles.miniBlock3D} />
+                                    <Text style={styles.blockName}>Oro</Text>
+                                </View>
+                                <Text style={styles.blockValue}>$0.50</Text>
+                            </View>
+                            <View style={styles.blockRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <Image source={require('../assets/blocks/3d_diamond.png')} style={styles.miniBlock3D} />
+                                    <Text style={[styles.blockName, { color: '#00FFFF' }]}>Diamante</Text>
+                                </View>
+                                <Text style={[styles.blockValue, { color: '#00FFFF' }]}>$1.00</Text>
+                            </View>
+                            <View style={styles.blockRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <Image source={require('../assets/blocks/3d_obsidian.png')} style={styles.miniBlock3D} />
+                                    <Text style={[styles.blockName, { color: '#AA00AA' }]}>Obsidiana</Text>
+                                </View>
+                                <Text style={[styles.blockValue, { color: '#AA00AA' }]}>$2.00</Text>
+                            </View>
+                        </View>
+
+                        <View style={{ height: 20 }} />
+
+                        {/* SECCION DE HERRAMIENTAS */}
+                        <Text style={[styles.cardTitle, { fontSize: 16, color: '#AAA', borderBottomWidth: 0, marginBottom: 5 }]}>HERRAMIENTAS</Text>
+                        <Text style={[styles.text, { fontSize: 12, marginBottom: 10 }]}>Cada herramienta tiene durabilidad y poder:</Text>
+
+                        <View style={styles.toolsGrid}>
+                            <View style={styles.toolRow}>
+                                <Text style={styles.toolName}>Madera</Text>
+                                <Text style={styles.toolStats}>2 Usos / 1 Daño</Text>
+                            </View>
+                            <View style={styles.toolRow}>
+                                <Text style={styles.toolName}>Piedra</Text>
+                                <Text style={styles.toolStats}>3 Usos / 2 Daño</Text>
+                            </View>
+                            <View style={styles.toolRow}>
+                                <Text style={[styles.toolName, { color: '#FFD700' }]}>Oro</Text>
+                                <Text style={styles.toolStats}>5 Usos / 1 Daño</Text>
+                            </View>
+                            <View style={styles.toolRow}>
+                                <Text style={[styles.toolName, { color: '#00FFFF' }]}>Diamante</Text>
+                                <Text style={styles.toolStats}>8 Usos / 4 Daño</Text>
+                            </View>
+                            <View style={styles.toolRow}>
+                                <Text style={[styles.toolName, { color: '#FF4444' }]}>TNT</Text>
+                                <Text style={styles.toolStats}>1 Uso / 10 Daño</Text>
+                            </View>
+                        </View>
+
+                        <View style={{ height: 20 }} />
+
+                        {/* SECCION DE MULTIPLICADORES */}
+                        <Text style={[styles.cardTitle, { fontSize: 16, color: '#AAA', borderBottomWidth: 0, marginBottom: 5 }]}>MULTIPLICADORES</Text>
+
+                        <Text style={[styles.text, { marginBottom: 15 }]}>
+                            ¡Despeja una columna completa de bloques para desbloquear el multiplicador oculto!
+                        </Text>
+
+                        <View style={styles.mechanicRow}>
+                            <View style={[styles.mechanicIconContainer, { borderColor: '#FFA500', borderWidth: 1 }]}>
+                                <Text style={{ color: '#FFA500', fontFamily: 'Minecraft', fontSize: 20 }}>x6</Text>
+                            </View>
+                            <View style={styles.mechanicTextContainer}>
+                                <Text style={styles.text}>
+                                    Los multiplicadores <Text style={{ color: '#FFA500' }}>ALTOS (x5+)</Text> brillan y tienen un borde rojo.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={[styles.mechanicRow, { marginTop: 10 }]}>
+                            <View style={[styles.mechanicIconContainer, { borderColor: '#FFF', borderWidth: 1 }]}>
+                                <Text style={{ color: '#FFF', fontFamily: 'Minecraft', fontSize: 20 }}>x2</Text>
+                            </View>
+                            <View style={styles.mechanicTextContainer}>
+                                <Text style={styles.text}>
+                                    Los comunes (x2-x4) son estandar.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <Text style={[styles.text, { textAlign: 'center', marginTop: 15, fontSize: 12, opacity: 0.8 }]}>
+                            Los multiplicadores se suman al final y multiplican tu ganancia total de la ronda.
                         </Text>
                     </View>
 
@@ -190,10 +302,10 @@ const styles = StyleSheet.create({
         lineHeight: 22,
     },
     highlight: {
-        color: '#05DF72',
+        color: '#05df729c',
         fontFamily: 'Minecraft',
-        textAlign: 'center',
-        fontSize: 16,
+        fontSize: 13,
+        marginTop: 15,
     },
     mechanicRow: {
         flexDirection: 'row',
@@ -251,5 +363,55 @@ const styles = StyleSheet.create({
     scatterIcon: {
         width: 160,
         height: 120,
+    },
+    blocksGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    blockRow: {
+        width: '45%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        padding: 5,
+        borderRadius: 4,
+    },
+    blockName: {
+        color: '#DDD',
+        fontFamily: 'Minecraft',
+        fontSize: 14,
+    },
+    blockValue: {
+        color: '#05DF72',
+        fontFamily: 'Minecraft',
+        fontSize: 14,
+    },
+    miniBlock3D: {
+        width: 25,
+        height: 25,
+        resizeMode: 'contain'
+    },
+    toolsGrid: {
+        gap: 8,
+    },
+    toolRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        padding: 5,
+        borderRadius: 4,
+        paddingHorizontal: 10,
+    },
+    toolName: {
+        color: '#DDD',
+        fontFamily: 'Minecraft',
+        fontSize: 14,
+    },
+    toolStats: {
+        color: '#AAA',
+        fontFamily: 'Minecraft',
+        fontSize: 14,
     },
 });

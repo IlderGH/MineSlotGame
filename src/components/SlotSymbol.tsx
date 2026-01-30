@@ -1,132 +1,108 @@
 import React, { useEffect } from 'react';
-import { Image, StyleSheet, Dimensions } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withTiming,
-    withDelay,
-    withSequence,
     withRepeat,
-    Easing,
-    cancelAnimation
+    withSequence,
+    withDelay, // Importamos withDelay
+    ZoomOut,
+    BounceInUp,
 } from 'react-native-reanimated';
 import { SLOT_IMAGES } from '../constants/assets';
 
 interface SlotSymbolProps {
     symbol: string;
     size: number;
-    status: 'falling' | 'idle' | 'winning' | 'disappearing' | 'shifting';
-    delay?: number;
-    index?: number; // For stagger effect
-    rowIndex?: number; // For start position optimization
-    shiftRows?: number;
-    shiftHeight?: number;
+    isWinning: boolean; // Reemplaza 'status' por un booleano simple
+    delay?: number; // Para el efecto escalonado (stagger)
 }
 
-export const SlotSymbol = ({ symbol, size, status, delay = 0, index = 0, rowIndex = 0, shiftRows = 0, shiftHeight = 0 }: SlotSymbolProps) => {
-    const rowHeight = shiftHeight || size;
-
-    const getInitialTranslateY = () => {
-        if (status === 'falling') {
-            // Optimización: Empezar justo arriba del grid visible para evitar "tiempo muerto"
-            // El item cae desde -(su posicion relativa + altura del item + margen)
-            // Esto asegura que en t=0 ya está entrando a la pantalla
-            return -((rowIndex * rowHeight) + rowHeight + 20);
-        }
-        if (status === 'shifting') return -(shiftRows * rowHeight);
-        return 0;
-    };
-
-    const translateY = useSharedValue(getInitialTranslateY());
+export const SlotSymbol = ({ symbol, size, isWinning, delay = 0 }: SlotSymbolProps) => {
+    // Valores compartidos para la animación de victoria (pulso y rotación)
     const scale = useSharedValue(1);
     const rotation = useSharedValue(0);
-    const opacity = useSharedValue(1);
 
     const isScatter = symbol === 'scatter';
     const imageSource = SLOT_IMAGES[symbol] || SLOT_IMAGES['item_1']; // Fallback
 
+    // Efecto para activar la animación de victoria cuando isWinning cambia a true
     useEffect(() => {
-        cancelAnimation(translateY);
-        cancelAnimation(scale);
-        cancelAnimation(rotation);
-        cancelAnimation(opacity);
-
-        // Reset (reuse handling)
-        if (status === 'falling') {
-            // Recalcular posición inicial dinámica
-            const startY = -((rowIndex * rowHeight) + rowHeight + 20);
-            translateY.value = startY;
-
-            scale.value = 1;
-            rotation.value = 0;
-            opacity.value = 1;
-
-            // Staggered Drop
-            translateY.value = withDelay(
-                delay,
-                withTiming(0, { duration: 350, easing: Easing.linear }) // Faster drop (requested "increase by half second" roughly)
-            );
-        } else if (status === 'shifting') {
-            // Slide Down from previous position
-            translateY.value = -(shiftRows * rowHeight);
-            scale.value = 1;
-            rotation.value = 0;
-            opacity.value = 1;
-
-            translateY.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
-        } else if (status === 'winning') {
-            // Pulse & Rotate
-            // FIX: Ensure it is centered and visible, in case it was falling
-            translateY.value = 0;
-            opacity.value = 1;
-
+        if (isWinning) {
+            // Animación de pulso
             const targetScale = isScatter ? 1.4 : 1.2;
-            scale.value = withRepeat(withTiming(targetScale, { duration: 250 }), -1, true);
-            rotation.value = withRepeat(
-                withSequence(
-                    withTiming(-5, { duration: 100 }),
-                    withTiming(5, { duration: 100 })
-                ),
-                -1,
-                true
+
+            // Agregamos un delay de 1000ms (1 segundo) antes de empezar el pulso
+            scale.value = withDelay(
+                1000,
+                withRepeat(withTiming(targetScale, { duration: 250 }), -1, true)
             );
-        } else if (status === 'disappearing') {
-            // Expand & Fade
-            scale.value = withTiming(1.5, { duration: 300 });
-            opacity.value = withTiming(0, { duration: 300 });
+
+            // Animación de rotación (wobble)
+            // Agregamos el mismo delay a la rotación
+            rotation.value = withDelay(
+                1000,
+                withRepeat(
+                    withSequence(
+                        withTiming(-5, { duration: 100 }),
+                        withTiming(5, { duration: 100 })
+                    ),
+                    -1,
+                    true
+                )
+            );
         } else {
-            // Idle
-            translateY.value = 0;
+            // Resetear valores si deja de ganar (aunque normalmente se desmontará)
             scale.value = 1;
             rotation.value = 0;
-            opacity.value = 1;
         }
-    }, [status, delay, shiftRows, rowHeight]);
+    }, [isWinning]);
 
     const animatedStyle = useAnimatedStyle(() => {
         return {
             transform: [
-                { translateY: translateY.value },
                 { scale: scale.value },
                 { rotate: `${rotation.value}deg` }
             ],
-            opacity: opacity.value
         };
     });
 
     return (
-        <Animated.View style={[styles.container, { width: size, height: size }, animatedStyle]}>
-            <Image
-                source={imageSource}
-                style={[styles.image, isScatter && styles.scatterImage]}
-                resizeMode="contain"
-            />
+        <Animated.View
+            // OUTER VIEW: Layout Animations (Entrance / Exit)
+            // entering={BounceInUp.delay(delay).duration(600).springify()}
+            // Note: Since we are nesting, we apply the layout prop here.
+            entering={BounceInUp.delay(delay).duration(600).springify()}
+
+            // Layout Animation de Salida: Eliminada a petición del usuario
+            // exiting={ZoomOut.duration(1000)}
+
+            style={[styles.container, { width: size, height: size }]}
+        >
+            <Animated.View
+                // INNER VIEW: Transform Animations (Win Pulse / Rotation)
+                // This separates the transforms from the layout animation to avoid conflicts/warnings.
+                style={[styles.innerContainer, animatedStyle]}
+            >
+                <Image
+                    source={imageSource}
+                    style={[styles.image, isScatter && styles.scatterImage]}
+                    resizeMode="contain"
+                />
+            </Animated.View>
         </Animated.View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    innerContainer: {
+        width: '100%',
+        height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
     },

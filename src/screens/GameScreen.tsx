@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Alert, Modal, SafeAreaView, ImageBackground, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Alert, Modal, SafeAreaView, ImageBackground, ScrollView, Platform } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, interpolateColor, FadeOut, LinearTransition, ZoomOut } from 'react-native-reanimated';
+import { useSound } from '../context/SoundContext'; // Optional if needed
+
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import VolumeControl from '../components/VolumeControl';
 import { SLOT_IMAGES } from '../constants/assets';
 import { BET_LEVELS, PAYTABLE_BASE, GRID_ROWS as MINING_ROWS } from '../constants/gameRules';
 import { SlotSymbol } from '../components/SlotSymbol';
 import CustomAlert from '../components/CustomAlert';
+import { useCredits } from '../hooks/useCredits'; // Hook Persistencia
 
 // Config specific to this screen
 const SLOT_ROWS = 5;
 const SLOT_COLS = 6;
-const SYMBOLS = ['item_1', 'item_2', 'item_3', 'item_4', 'item_5', 'item_6', 'item_7', 'item_8', 'item_9', 'scatter'];
+const SYMBOLS = ['item_1', 'item_2', 'item_3', 'item_4', 'item_5', 'item_7', 'item_8', 'item_9', 'scatter'];
 // Total Weight: ~300. 
 // Esto define el "RTP" (Retorno al Jugador) y la "Volatilidad".
 const SYMBOL_WEIGHTS: Record<string, number> = {
@@ -19,20 +24,19 @@ const SYMBOL_WEIGHTS: Record<string, number> = {
     'item_3': 45,
     'item_4': 40,
     'item_5': 35,
-    'item_6': 25,
+    // 'item_6': 25, // ELIMINADO
     'item_7': 15,
     'item_8': 10,  // Raro
     'item_9': 5,   // Muy raro (Premium)
     'scatter': 1.8 // Ajuste fino para el bonus
 };
-type SymbolStatus = 'falling' | 'idle' | 'winning' | 'disappearing' | 'shifting';
 
 interface SlotCell {
     id: string;
     symbol: string;
-    status: SymbolStatus;
-    delay?: number; // For stagger
-    shiftRows?: number;
+    isWinning: boolean;
+    isExploding?: boolean; // Para trigger de animación de salida manual
+    delay?: number; // Para el efecto escalonado (stagger) de las animaciones de entrada
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -64,16 +68,102 @@ const getWeightedSymbol = (counts: Record<string, number>) => {
 const { width, height } = Dimensions.get('window');
 const ITEM_SIZE = (width - 60) / SLOT_COLS;
 
-// ANIMATION TIMINGS (ms)
-const TIMINGS = {
-    FALL: 950,        // 350ms drop + 450ms max stagger (cols*90) + buffer
-    WIN_PULSE: 1400,  // Keep pulsing time
-    DISAPPEAR: 600,   // Fade out time
-    CASCADE: 950      // Faster cascade
+const WinningCell = ({ children, isWinning, isExploding, width, height }: { children: React.ReactNode, isWinning: boolean, isExploding?: boolean, width: number, height: number }) => {
+    // Shared value for animation (0 to 1)
+    const anim = useSharedValue(0);
+    const scale = useSharedValue(1);
+    const opacity = useSharedValue(1);
+
+    useEffect(() => {
+        if (isExploding) {
+            // EXPLODE: Scale Up & Fade Out
+            scale.value = withTiming(1.5, { duration: 500 });
+            opacity.value = withTiming(0, { duration: 500 });
+        } else if (isWinning) {
+            // WIN: Pulse (Reset scale/opacity just in case)
+            scale.value = withTiming(1);
+            opacity.value = withTiming(1);
+            anim.value = withRepeat(
+                withSequence(
+                    withTiming(1, { duration: 400 }),
+                    withTiming(0, { duration: 400 })
+                ),
+                -1, // Infinite repeat
+                true // Revert (yoyo)
+            );
+        } else {
+            // RESET
+            anim.value = withTiming(0);
+            scale.value = withTiming(1);
+            opacity.value = withTiming(1);
+        }
+    }, [isWinning, isExploding]);
+
+    const animatedStyle = useAnimatedStyle(() => {
+        const borderColor = interpolateColor(
+            anim.value,
+            [0, 1],
+            ['rgba(0,0,0,0)', '#FFD700'] // From transparent to GOLD
+        );
+        const backgroundColor = interpolateColor(
+            anim.value,
+            [0, 1],
+            ['rgba(0,0,0,0)', 'rgba(255, 215, 0, 0.4)'] // From transparent to Glowing Gold
+        );
+
+        return {
+            borderColor,
+            backgroundColor,
+            borderWidth: isWinning ? 2 : 0, // Force border when winning
+            transform: [{ scale: scale.value }],
+            opacity: opacity.value
+        };
+    });
+
+    return (
+        <Animated.View style={[styles.cell, { width, height }, animatedStyle]}>
+            {children}
+        </Animated.View>
+    );
 };
 
-export default function GameScreen({ navigation }: any) {
-    const [credits, setCredits] = useState(1000);
+
+// ANIMATION TIMINGS (ms)
+const TIMINGS = {
+    SPIN_DELAY: 200,  // Pequeña espera antes de procesar lógica tras girar
+    WIN_PULSE: 2000,  // Sync with pulse cycles (approx 2-3 cycles)
+    CASCADE_DELAY: 800 // Tiempo para esperar que caigan las nuevas piezas
+};
+
+export default function GameScreen({ navigation, route }: any) {
+    // Hook de Créditos (Persistencia + Bancarrota)
+    const {
+        credits,
+        updateCredits: setCredits,
+        loading
+    } = useCredits();
+
+    // Usar route prop en lugar de hook para evitar problemas de importación
+    // const route = useRoute();
+    const params = route.params as { bonusWin?: number; bonusTimestamp?: number } | undefined;
+    const bonusWin = params?.bonusWin ?? 0;
+    const bonusTimestamp = params?.bonusTimestamp;
+
+    // Ref to track processed bonuses and prevent duplicate adds
+    const lastProcessedBonusRef = useRef<number | undefined>(undefined);
+
+    useEffect(() => {
+        if (bonusWin > 0) {
+            // Log para debug si fuera necesario
+            // console.log("Recibido bonusWin:", bonusWin);
+        }
+    }, [bonusWin]);
+
+    // GLOBAL SOUND CONTEXT
+    const { playSound } = useSound();
+
+    // Sync Ref
+
     const [betIndex, setBetIndex] = useState(0);
     const [grid, setGrid] = useState<SlotCell[][]>([]);
     const [isSpinning, setIsSpinning] = useState(false);
@@ -83,8 +173,14 @@ export default function GameScreen({ navigation }: any) {
 
     // Custom Alert State
     const [alertVisible, setAlertVisible] = useState(false);
-    const [alertConfig, setAlertConfig] = useState({ title: '', message: '', onConfirm: () => { } });
-
+    const [alertConfig, setAlertConfig] = useState<{
+        title: string;
+        message: string;
+        onConfirm?: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+    }>({ title: '', message: '' });
     const autoSpinRef = useRef(0);
     const currentBet = BET_LEVELS[betIndex];
 
@@ -106,12 +202,48 @@ export default function GameScreen({ navigation }: any) {
             for (let c = 0; c < SLOT_COLS; c++) {
                 const sym = getWeightedSymbol(counts);
                 counts[sym] = (counts[sym] || 0) + 1;
-                row.push({ id: generateId(), symbol: sym, status: 'idle' });
+                // Inicializamos sin animación ganadora
+                row.push({ id: generateId(), symbol: sym, isWinning: false });
             }
             newGrid.push(row);
         }
         setGrid(newGrid);
     };
+
+    // Update Credits when returning from Bonus - ROBUST TIMESTAMP VERSION
+    useEffect(() => {
+        // CRITICAL: Wait for credits to load from storage to avoid overwriting with initial state (250)
+        if (loading) return;
+
+        const bonus = Number(bonusWin);
+        // Ensure valid bonus AND unique timestamp (prevent reprocessing)
+        if (!isNaN(bonus) && bonus > 0 && bonusTimestamp && bonusTimestamp !== lastProcessedBonusRef.current) {
+
+            // Mark as processed immediately
+            lastProcessedBonusRef.current = bonusTimestamp;
+
+            // Calculate new total using FRESH credits dependency
+            const newTotal = parseFloat((credits + bonus).toFixed(2));
+
+            if (!isNaN(newTotal)) {
+                setCredits(newTotal);
+
+                setAlertConfig({
+                    title: "¡BONUS TERMINADO!",
+                    message: `Ganaste $${bonus.toFixed(2)} en la mina.`,
+                    onConfirm: () => {
+                        setAlertVisible(false);
+                    },
+                    confirmText: "GENIAL!!"
+                });
+                setAlertVisible(true);
+
+                // We don't even need to clear params immediately anymore because the timestamp guards us,
+                // but it's cleaner to do so.
+                navigation.setParams({ bonusWin: 0, bonusTimestamp: undefined });
+            }
+        }
+    }, [bonusWin, bonusTimestamp, credits, loading]);
 
     const handleSpin = (isAuto: boolean = false) => {
         // STOP Logic: If user clicks while Auto is active
@@ -121,17 +253,28 @@ export default function GameScreen({ navigation }: any) {
             return;
         }
 
+        if (loading) return; // Esperar a que carguen los créditos
+
         if (credits < currentBet) {
-            Alert.alert("Saldo insuficiente", "No tienes suficientes créditos.");
+            setAlertConfig({
+                title: "SALDO INSUFICIENTE",
+                message: "No tienes suficientes créditos para girar.",
+                onConfirm: () => setAlertVisible(false),
+                confirmText: "ENTENDIDO"
+            });
+            setAlertVisible(true);
             setAutoSpinCount(0); // Stop auto
             return;
         }
 
         setIsSpinning(true);
-        setCredits(prev => parseFloat((prev - currentBet).toFixed(2)));
+        const newCredits = parseFloat((credits - currentBet).toFixed(2));
+        setCredits(newCredits);
         setWinAmount(0);
 
-        // 1. Generate New Grid (All Falling)
+        // 1. Generar Nuevo Grid
+        // Al cambiar los IDs, React desmontará los viejos componentes (Exiting: ZoomOut)
+        // y montará los nuevos (Entering: BounceInUp).
         const newGrid: SlotCell[][] = [];
         const counts: Record<string, number> = {};
 
@@ -141,10 +284,10 @@ export default function GameScreen({ navigation }: any) {
                 const sym = getWeightedSymbol(counts);
                 counts[sym] = (counts[sym] || 0) + 1;
                 row.push({
-                    id: generateId(),
+                    id: generateId(), // ID NUEVO -> Activa animación de entrada
                     symbol: sym,
-                    status: 'falling',
-                    delay: c * 90 // Faster stagger (was 100)
+                    isWinning: false,
+                    delay: c * 80 // Stagger por columnas para efecto ola
                 });
             }
             newGrid.push(row);
@@ -152,86 +295,76 @@ export default function GameScreen({ navigation }: any) {
 
         setGrid(newGrid);
 
-        // Wait for Drop Animation to finish before checking wins
+        // Esperar un poco a que termine la caída inicial antes de buscar premios
+        // La animación dura ~600ms + delays. Esperamos 900ms para asegurar.
         setTimeout(() => {
             processGameLoop(newGrid);
-        }, 100);
+        }, 900);
     };
 
+    // Función para rellenar huecos tras eliminar ganadores
     function performCascade(oldGrid: SlotCell[][], destroyedIds: Set<string>): SlotCell[][] {
         const newGrid: SlotCell[][] = Array(SLOT_ROWS).fill(null).map(() => []);
-        // Iterate Columns
+
+        // Iterar por columnas
         for (let c = 0; c < SLOT_COLS; c++) {
-            const survived: (SlotCell & { originalRow: number })[] = [];
-            // Collect survivors from bottom up
+            const survived: SlotCell[] = [];
+
+            // 1. Recolectar sobrevivientes (de abajo hacia arriba)
             for (let r = 0; r < SLOT_ROWS; r++) {
                 const cell = oldGrid[r][c];
                 if (!destroyedIds.has(cell.id)) {
-                    survived.push({ ...cell, status: 'idle', delay: 0, originalRow: r } as any);
+                    // Conservamos el ID original para que NO se re-anime la entrada
+                    // Resetamos isWinning y el delay
+                    survived.push({ ...cell, isWinning: false, delay: 0 });
                 }
             }
 
-            // How many missing?
+            // 2. ¿Cuántos faltan?
             const missing = SLOT_ROWS - survived.length;
 
-            // Generate new items for top
+            // 3. Generar NUEVOS items para arriba
             const newItems: SlotCell[] = [];
             for (let i = 0; i < missing; i++) {
-                const sym = getWeightedSymbol({}); // Simple generation
+                const sym = getWeightedSymbol({});
                 newItems.push({
-                    id: generateId(),
+                    id: generateId(),     // ID NUEVO -> Animación Entrada
                     symbol: sym,
-                    status: 'falling',
-                    delay: c * 90 // Faster stagger (was 100)
+                    isWinning: false,
+                    delay: c * 80         // Stagger por columnas
                 });
             }
 
-            // Combine: New items on top, survivors on bottom
+            // 4. Combinar: Nuevos arriba + Sobrevivientes abajo
+            // Nota: En la pantalla, índice 0 es arriba.
             const fullColumn = [...newItems, ...survived];
 
-            // Assign to newGrid rows
+            // 5. Asignar al grid
             for (let r = 0; r < SLOT_ROWS; r++) {
-                const cell = fullColumn[r];
-                if (r < missing) {
-                    newGrid[r][c] = cell;
-                } else {
-                    const originalRow = (cell as any).originalRow;
-                    const shift = r - originalRow;
-                    newGrid[r][c] = {
-                        ...cell,
-                        status: shift > 0 ? 'shifting' : 'idle',
-                        shiftRows: shift
-                    };
-                    delete (newGrid[r][c] as any).originalRow;
-                }
+                newGrid[r][c] = fullColumn[r];
             }
         }
         return newGrid;
     }
 
-    // Agregamos el parámetro 'fromCascade' al final
     const processGameLoop = async (
         currentGrid: SlotCell[][],
         skipRegularWins: boolean = false,
-        accumulatedWin: number = 0,
-        fromCascade: boolean = false // <--- NUEVO PARÁMETRO
+        accumulatedWin: number = 0
     ) => {
-        // 1. Check Matches
+        // 1. Contar y Buscar Ganadores
         const counts: Record<string, number> = {};
         const winIds = new Set<string>();
         let roundWin = 0;
         const betRatio = currentBet / 0.20;
 
-        // Count symbols
         currentGrid.flat().forEach(cell => {
             counts[cell.symbol] = (counts[cell.symbol] || 0) + 1;
         });
 
-        // Identify Winners
         if (!skipRegularWins) {
             Object.keys(counts).forEach(sym => {
                 if (sym !== 'scatter') {
-                    // Lógica de Dificultad (9 para comunes, 8 para el resto)
                     let threshold = 8;
                     if (['item_1', 'item_2', 'item_3'].includes(sym)) {
                         threshold = 8;
@@ -257,79 +390,83 @@ export default function GameScreen({ navigation }: any) {
             });
         }
 
-        // --- CORRECCIÓN DE LA ESPERA INICIAL ---
-        // Si venimos de una cascada, NO esperamos (porque ya esperamos en el paso anterior).
-        // Si es el primer giro, SÍ esperamos a que caigan (tu preferencia de 1300ms para asegurar).
-        if (!fromCascade) {
-            // Ajustamos a 1300ms: 700ms caída base + 500ms delay max + 100ms buffer
-            await new Promise(r => setTimeout(r, TIMINGS.FALL));
-        }
-
         if (winIds.size > 0) {
-            // --- SECUENCIA DE VICTORIA ---
+            // --- HAY GANADORES ---
+            // Small delay to sync with visual pulse start
+            setTimeout(() => playSound('win_items'), 100);
             setWinAmount(prev => prev + roundWin);
 
-            // Pequeña pausa técnica para asegurar que el renderizado esté listo
-            await new Promise(r => setTimeout(r, 50));
-
-            // 1. ESTADO WINNING (Brillo/Pulso)
+            // 1. Marcar ganadores (Activa animación de Pulso/Win)
             const winGrid = currentGrid.map(row => row.map(cell => ({
                 ...cell,
-                status: winIds.has(cell.id) ? 'winning' as SymbolStatus : 'idle' as SymbolStatus
+                isWinning: winIds.has(cell.id)
             })));
             setGrid(winGrid);
 
-            // CORRECCIÓN DEL "CONGELAMIENTO":
+            // 2. Esperar a que el jugador vea la celebración (pulso)
             await new Promise(r => setTimeout(r, TIMINGS.WIN_PULSE));
 
-            // 2. ESTADO DISAPPEARING (Desaparecer)
-            const disappearGrid = winGrid.map(row => row.map(cell => ({
+            // NEW: EXPLICIT EXPLOSION PHASE
+            // Trigger manual Scale/Fade animation
+            const explodingGrid = winGrid.map(row => row.map(cell => ({
                 ...cell,
-                status: winIds.has(cell.id) ? 'disappearing' as SymbolStatus : cell.status
+                isExploding: winIds.has(cell.id)
             })));
-            setGrid(disappearGrid);
+            setGrid(explodingGrid);
 
-            // Esperamos a que terminen de desaparecer (fade out)
-            await new Promise(r => setTimeout(r, TIMINGS.DISAPPEAR));
 
-            // 3. CASCADA (Rellenar huecos)
-            const filledGrid = performCascade(disappearGrid, winIds);
-            setGrid(filledGrid);
+            // Wait for explosion animation (500ms)
+            await new Promise(r => setTimeout(r, 500));
 
-            // CORRECCIÓN DE CASCADA ROTA:
-            // Aquí esperamos a que caigan los NUEVOS bloques.
-            // Aumentamos a 1300ms para garantizar que la columna 6 (delay 500ms) termine su caída (700ms).
-            await new Promise(r => setTimeout(r, TIMINGS.CASCADE));
+            // 3. Cascada: Eliminar ganadores y traer nuevos
+            // Al actualizar 'grid' con menos items o items nuevos,
+            // Reanimated maneja:
+            // - Exiting (ZoomOut) para los que están en 'destroyedIds' (ya no están en newGrid)
+            // - Entering (BounceInUp) para los nuevos generados
+            const cascadeGrid = performCascade(explodingGrid, winIds);
+            setGrid(cascadeGrid);
 
-            // 4. RECURSIÓN
-            // Importante: Pasamos 'true' en fromCascade para que el siguiente ciclo 
-            // NO vuelva a esperar los 1200ms iniciales y detecte el premio inmediatamente.
-            processGameLoop(filledGrid, false, accumulatedWin + roundWin, true);
+            // 4. Esperar a que caigan las nuevas piezas
+            await new Promise(r => setTimeout(r, TIMINGS.CASCADE_DELAY));
+
+            // 5. Recursión: Verificar si hay nuevos premios tras la cascada
+            processGameLoop(cascadeGrid, false, accumulatedWin + roundWin);
 
         } else {
-            // --- NO MÁS VICTORIAS ---
+            // --- FIN DEL TURNO (No más premios) ---
             if (accumulatedWin > 0) {
-                setCredits(prev => parseFloat((prev + accumulatedWin).toFixed(2)));
+                const newCredits = parseFloat((credits + accumulatedWin).toFixed(2));
+                setCredits(newCredits);
             }
             setIsSpinning(false);
 
-            // Check Scatters
+            // Comprobar Scatters (Bonus)
             const scatterIds: string[] = [];
             currentGrid.flat().forEach(cell => {
                 if (cell.symbol === 'scatter') scatterIds.push(cell.id);
             });
 
             if (scatterIds.length >= 3) {
+                // Animación especial para scatters
                 const scatterGrid = currentGrid.map(row => row.map(cell => ({
                     ...cell,
-                    status: scatterIds.includes(cell.id) ? 'winning' as SymbolStatus : 'idle' as SymbolStatus
+                    isWinning: scatterIds.includes(cell.id)
                 })));
                 setGrid(scatterGrid);
+                setTimeout(() => playSound('win_bonus'), 1000);
+
 
                 setTimeout(() => {
-                    Alert.alert("¡BONUS!", `¡${scatterIds.length} Scatters! Entrando a la ronda de minería...`, [
-                        { text: "Vamos", onPress: () => enterBonus(10) }
-                    ]);
+                    setAlertConfig({
+                        title: "¡BONUS!",
+                        message: `¡${scatterIds.length} Scatters! Entrando a la ronda de minería...`,
+                        onConfirm: () => {
+                            setAlertVisible(false);
+                            enterBonus(10);
+                        },
+                        confirmText: "VAMOS"
+                    });
+                    setAlertVisible(true);
                 }, 1000);
             }
 
@@ -370,13 +507,15 @@ export default function GameScreen({ navigation }: any) {
         setAlertConfig({
             title: "¿COMPRAR FUNCION?",
             message: `Costo: $${cost.toFixed(2)}\n\n¿Deseas activar el Bonus inmediatamente?`,
+            onCancel: () => setAlertVisible(false), // Needs cancel button
             onConfirm: () => {
                 setAlertVisible(false);
-                setCredits(prev => parseFloat((prev - cost).toFixed(2)));
+                const newCredits = parseFloat((credits - cost).toFixed(2));
+                setCredits(newCredits);
                 setIsSpinning(true);
 
                 // 1. Clone Current Grid
-                const newGrid = grid.map(row => row.map(cell => ({ ...cell, status: 'idle' as SymbolStatus })));
+                const newGrid = grid.map(row => row.map(cell => ({ ...cell, isWinning: false })));
 
                 // 2. Count Existing Scatters & Find Available Slots
                 let scatterCount = 0;
@@ -408,13 +547,14 @@ export default function GameScreen({ navigation }: any) {
                         newGrid[pos.r][pos.c] = {
                             id: generateId(),
                             symbol: 'scatter',
-                            status: 'idle',
+                            isWinning: false,
                             delay: 0
                         };
                     }
                 }
 
                 setGrid(newGrid);
+
 
                 // 3. Process Game Loop
                 setTimeout(() => {
@@ -448,26 +588,51 @@ export default function GameScreen({ navigation }: any) {
                     </View>
                 </View>
 
+                {/* Global Volume Control */}
+                <VolumeControl />
+
                 {/* Slot Grid */}
                 <View style={styles.gridContainer}>
-                    {grid.map((row, rIndex) => (
-                        <View key={rIndex} style={styles.row}>
-                            {row.map((cell, cIndex) => (
-                                <View key={`${cell.id}-${cIndex}`} style={[styles.cell, { width: ITEM_SIZE, height: ITEM_SIZE }]}>
-                                    <SlotSymbol
-                                        symbol={cell.symbol}
-                                        size={ITEM_SIZE * 0.8}
-                                        status={cell.status}
-                                        delay={cell.delay}
-                                        index={cIndex}
-                                        rowIndex={rIndex} // Pass row index for smart start position
-                                        shiftRows={cell.shiftRows}
-                                        shiftHeight={ITEM_SIZE + 4}
-                                    />
-                                </View>
-                            ))}
-                        </View>
-                    ))}
+                    {/* STATIC BACKGROUND GRID (Empty Slots) */}
+                    <View style={[StyleSheet.absoluteFill, { padding: 5, justifyContent: 'center' }]}>
+                        {Array(SLOT_ROWS).fill(0).map((_, r) => (
+                            <View key={`bg-row-${r}`} style={styles.row}>
+                                {Array(SLOT_COLS).fill(0).map((_, c) => (
+                                    <View key={`bg-cell-${c}`} style={[styles.cell, { width: ITEM_SIZE, height: ITEM_SIZE, backgroundColor: 'rgba(255,255,255,0.1)' }]} />
+                                ))}
+                            </View>
+                        ))}
+                    </View>
+
+                    {/* ANIMATED CONTENT GRID */}
+                    {/* ANIMATED CONTENT GRID - Rendered by COLUMNS for Drop Animation */}
+                    <View style={{ flexDirection: 'row' }}>
+                        {Array(SLOT_COLS).fill(0).map((_, cIndex) => (
+                            <View key={`col-${cIndex}`} style={{ flexDirection: 'column' }}>
+                                {grid.map((row) => row[cIndex]).filter(cell => cell !== undefined).map((cell) => (
+                                    <Animated.View
+                                        key={cell.id}
+                                        exiting={cell.isWinning ? ZoomOut.duration(500) : undefined}
+                                        layout={LinearTransition.springify().damping(15)}
+                                    >
+                                        <WinningCell
+                                            isWinning={cell.isWinning}
+                                            isExploding={cell.isExploding}
+                                            width={ITEM_SIZE}
+                                            height={ITEM_SIZE}
+                                        >
+                                            <SlotSymbol
+                                                symbol={cell.symbol}
+                                                size={ITEM_SIZE * 0.8}
+                                                isWinning={cell.isWinning}
+                                                delay={cell.delay}
+                                            />
+                                        </WinningCell>
+                                    </Animated.View>
+                                ))}
+                            </View>
+                        ))}
+                    </View>
                 </View>
 
                 {/* Controls */}
@@ -578,9 +743,9 @@ export default function GameScreen({ navigation }: any) {
                 title={alertConfig.title}
                 message={alertConfig.message}
                 onConfirm={alertConfig.onConfirm}
-                onCancel={() => setAlertVisible(false)}
-                confirmText={alertConfig.title.includes("INSUFICIENTE") ? "ENTENDIDO" : "COMPRAR"}
-                cancelText="CANCELAR"
+                onCancel={alertConfig.onCancel}
+                confirmText={alertConfig.confirmText || "ACEPTAR"}
+                cancelText={alertConfig.cancelText || "CANCELAR"}
             />
         </ImageBackground>
 
@@ -642,7 +807,7 @@ const styles = StyleSheet.create({
     row: { flexDirection: 'row' },
     cell: {
         margin: 2,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        // backgroundColor: 'rgba(255,255,255,0.1)', // Moved to Static Grid
         borderRadius: 5,
         justifyContent: 'center',
         alignItems: 'center',

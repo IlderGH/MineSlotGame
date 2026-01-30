@@ -1,9 +1,11 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Dimensions, SafeAreaView, TouchableOpacity, TextInput, Alert, ImageBackground, Image, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import VolumeControl from '../components/VolumeControl';
 import { BlockItem } from '../components/BlockItem';
 import { ToolItem } from '../components/ToolItem';
 import { WinAnimation } from '../components/WinAnimation';
+import CustomAlert from '../components/CustomAlert';
 import { GRID_COLS, TOOL_HIT_DURATION, ENTRANCE_DURATION, PRESENTATION_DURATION } from '../constants/gameRules';
 import { useGame } from '../hooks/useGame';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
@@ -128,22 +130,31 @@ export default function FunsionScreen({ navigation, route }: any) {
 
     // Handle Exit/Finish
     // Handle Exit/Finish
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState<{
+        title: string;
+        message: string;
+        onConfirm?: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+    }>({ title: '', message: '' });
+
+    // Handle Exit/Finish
     const handleExit = () => {
-        Alert.alert(
-            "¿Salir?",
-            "Perderás el progreso de la ronda actual.",
-            [
-                { text: "Cancelar", style: "cancel" },
-                {
-                    text: "Salir",
-                    style: "destructive",
-                    onPress: () => {
-                        resetGame();
-                        navigation.navigate('Home');
-                    }
-                }
-            ]
-        );
+        setAlertConfig({
+            title: "¿SALIR?",
+            message: "Perderás el progreso de la ronda actual.",
+            onCancel: () => setAlertVisible(false),
+            onConfirm: () => {
+                setAlertVisible(false);
+                resetGame();
+                navigation.navigate('Home');
+            },
+            confirmText: "SALIR",
+            cancelText: "CANCELAR"
+        });
+        setAlertVisible(true);
     };
 
     // Calculate Earned Multipliers (Cleared Columns)
@@ -161,6 +172,7 @@ export default function FunsionScreen({ navigation, route }: any) {
         <ImageBackground source={require('../assets/fondo1.png')} style={styles.container} resizeMode="cover">
             <SafeAreaView style={styles.safeArea} >
                 <StatusBar style="light" />
+                <VolumeControl />
 
                 {/* Removed BETTING View - Bonus starts automatically */}
 
@@ -286,12 +298,50 @@ export default function FunsionScreen({ navigation, route }: any) {
 
                 {gameState === 'FINISHED' && (
                     totalWin > 0 ? (
-                        <WinAnimation
-                            multipliers={multipliers}
-                            earnedIndices={earnedIndices}
-                            betAmount={accumulatedWin}
-                            onReset={() => { resetGame(); navigation.navigate('Game'); }}
-                        />
+                        earnedIndices.length > 0 ? (
+                            <WinAnimation
+                                multipliers={multipliers}
+                                earnedIndices={earnedIndices}
+                                betAmount={accumulatedWin}
+                                onReset={() => {
+                                    resetGame();
+                                    // Calcular ganancia final: (acumulado * multiplicadores seleccionados)
+                                    // WinAnimation ya calcula esto internamente para mostrarlo,
+                                    // pero necesitamos pasarlo.
+                                    // REVISIÓN: WinAnimation debería llamar a onReset con el monto total o
+                                    // debemos calcularlo aquí.
+                                    // Simplificación: Pasamos accumulatedWin y dejemos que GameScreen se encargue?
+                                    // NO, necesitamos el total REAL (multiplicado).
+                                    // WinAnimation calcula "totalWin" visualmente.
+                                    // Debemos recalcular aquí para pasar el dato seguro.
+                                    const totalMultiplier = multipliers.reduce((acc, val, idx) => {
+                                        return earnedIndices.includes(idx) ? acc + val : acc;
+                                    }, 0);
+                                    const finalWin = accumulatedWin * (totalMultiplier || 1);
+
+                                    navigation.navigate('Game', { bonusWin: finalWin, bonusTimestamp: Date.now() });
+                                }}
+                            />
+                        ) : (
+                            // NO MULTIPLIERS SCREEN
+                            <View style={styles.centerContent}>
+                                <Text style={[styles.title, { fontSize: 30, textAlign: 'center', lineHeight: 40 }]}>
+                                    No conseguiste multiplicadores
+                                </Text>
+
+                                <Text style={styles.subtitle}>GANANCIA TOTAL</Text>
+                                <Text style={[styles.moneyText, { fontSize: 50, marginBottom: 30 }]}>
+                                    $ {accumulatedWin.toFixed(2)}
+                                </Text>
+
+                                <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={() => {
+                                    resetGame();
+                                    navigation.navigate('Game', { bonusWin: accumulatedWin, bonusTimestamp: Date.now() });
+                                }}>
+                                    <Text style={styles.buttonText}>COBRAR</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )
                     ) : (
                         <View style={styles.centerContent}>
                             <Text style={styles.title}>¡Juego Terminado!</Text>
@@ -303,6 +353,16 @@ export default function FunsionScreen({ navigation, route }: any) {
                         </View>
                     )
                 )}
+
+                <CustomAlert
+                    visible={alertVisible}
+                    title={alertConfig.title}
+                    message={alertConfig.message}
+                    onConfirm={alertConfig.onConfirm}
+                    onCancel={alertConfig.onCancel}
+                    confirmText={alertConfig.confirmText}
+                    cancelText={alertConfig.cancelText}
+                />
 
             </SafeAreaView>
         </ImageBackground>
@@ -323,13 +383,22 @@ const styles = StyleSheet.create({
     },
     centerContent: {
         alignItems: 'center',
+        width: '80%',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 9,
+        borderColor: '#525252',
+        borderWidth: 5,
+        paddingTop: 20,
+        paddingBottom: 20,
         justifyContent: 'center',
-        width: '100%',
     },
     title: {
-        fontSize: 40,
+        fontSize: 25,
         fontFamily: 'Minecraft',
         color: '#FFD700',
+        textShadowColor: '#000000ff',
+        textShadowRadius: 6,
+        textShadowOffset: { width: -2, height: 0 },
         marginBottom: 20,
         textTransform: 'uppercase',
     },
@@ -354,7 +423,8 @@ const styles = StyleSheet.create({
     },
     header: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start', // Moved to start (left)
+        gap: 20,                      // Spacing between badges
         width: '95%',
         alignItems: 'center',
         marginBottom: 10,

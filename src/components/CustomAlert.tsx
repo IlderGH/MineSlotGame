@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     title: {
-        color: '#353434ff', // Gold
+        color: '#353434ff', // Dark text for title on gray bg
         fontSize: 20,
         fontFamily: 'Minecraft',
         textShadowColor: '#707070ff',

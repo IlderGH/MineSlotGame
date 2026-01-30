@@ -26,7 +26,7 @@ export const useGame = () => {
     useEffect(() => {
         if (isAnimating) {
             const t = setTimeout(() => {
-                console.warn("Animation stuck? Forcing reset.");
+                // Warn removed
                 setIsAnimating(false);
             }, 20000); // 20s limit
             return () => clearTimeout(t);
@@ -221,7 +221,7 @@ export const useGame = () => {
             }, finalDelay);
 
         } catch (error) {
-            console.error("Error in spin logic:", error);
+            // Error handling silent
             setIsAnimating(false);
         }
 

@@ -2,24 +2,39 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ImageBackground, Alert, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SLOT_IMAGES } from '../constants/assets';
+import CustomAlert from '../components/CustomAlert';
+
+import { useSound } from '../context/SoundContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function EggSelectionScreen({ navigation, route }: any) {
     const { apuesta } = route.params;
+    const { playSound } = useSound();
+
+    const [alertVisible, setAlertVisible] = React.useState(false);
+    const [alertConfig, setAlertConfig] = React.useState<{
+        title: string;
+        message: string;
+        onConfirm?: () => void;
+        confirmText?: string;
+    }>({ title: '', message: '' });
 
     const handleEggPick = () => {
+        playSound('egg_crack');
         const outcomes = [7, 10, 13];
         const result = outcomes[Math.floor(Math.random() * outcomes.length)];
 
-        Alert.alert("¡PREMIO!", `¡Has conseguido ${result} Tiros Gratis!`, [
-            {
-                text: "JUGAR",
-                onPress: () => {
-                    navigation.replace('Funsion', { tiros: result, apuesta: apuesta });
-                }
-            }
-        ]);
+        setAlertConfig({
+            title: "¡PREMIO!",
+            message: `¡Has conseguido ${result} Tiros Gratis!`,
+            onConfirm: () => {
+                setAlertVisible(false);
+                navigation.replace('Funsion', { tiros: result, apuesta: apuesta });
+            },
+            confirmText: "JUGAR"
+        });
+        setAlertVisible(true);
     };
 
     return (
@@ -38,6 +53,14 @@ export default function EggSelectionScreen({ navigation, route }: any) {
                 </View>
             </View>
             <StatusBar style="light" />
+
+            <CustomAlert
+                visible={alertVisible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                onConfirm={alertConfig.onConfirm}
+                confirmText={alertConfig.confirmText}
+            />
         </ImageBackground>
     );
 }

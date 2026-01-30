@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./src/assets/splash-icon.png",
       "resizeMode": "contain",
@@ -20,8 +20,7 @@
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.ilderuss.MineSlotGame"
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
@@ -29,6 +28,11 @@
     "plugins": [
       "expo-asset",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bda9a9e5-815f-4660-ba6e-567ba0d34e28"
+      }
+    }
   }
 }
